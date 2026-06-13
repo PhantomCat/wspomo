@@ -896,13 +896,16 @@
     function tick() {
       if (state.timeLeft <= 0) {
         clearInterval(state.intervalId);
-        state.running = false;
         triggerNotification(state.mode === 'work');
 
         const nextMode = getNextMode();
         switchMode(nextMode);
         updateStartButton();
         $('startBtn').classList.remove('paused');
+
+        state.running = true;
+        updateStartButton();
+        state.intervalId = setInterval(tick, 1000);
         return;
       }
 
