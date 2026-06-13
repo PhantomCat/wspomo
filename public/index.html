@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pomodoro Timer</title>
+  <style>
+    :root {
+      --ctp-crust: #11111b;
+      --ctp-mantle: #181825;
+      --ctp-base: #1e1e2e;
+      --ctp-surface0: #313244;
+      --ctp-surface1: #45475a;
+      --ctp-surface2: #585b70;
+      --ctp-overlay0: #6c7086;
+      --ctp-overlay1: #7f849c;
+      --ctp-subtext0: #a6adc8;
+      --ctp-subtext1: #bac2de;
+      --ctp-text: #cdd6f4;
+      --ctp-lavender: #b4befe;
+      --ctp-blue: #89b4fa;
+      --ctp-sapphire: #74c7ec;
+      --ctp-teal: #94e2d5;
+      --ctp-green: #a6e3a1;
+      --ctp-yellow: #f9e2af;
+      --ctp-peach: #fab387;
+      --ctp-maroon: #eba0ac;
+      --ctp-red: #f38ba8;
+      --ctp-mauve: #cba6f7;
+      --ctp-pink: #f5c2e7;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background: var(--ctp-base);
+      color: var(--ctp-text);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 480px;
+      padding: 2rem;
+    }
+
+    .mode-tabs {
+      display: flex;
+      gap: 0.5rem;
+      margin-bottom: 2rem;
+      background: var(--ctp-surface0);
+      border-radius: 12px;
+      padding: 0.25rem;
+    }
+
+    .mode-tab {
+      flex: 1;
+      padding: 0.75rem 0.5rem;
+      border: none;
+      background: transparent;
+      color: var(--ctp-subtext0);
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 0.875rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .mode-tab:hover { color: var(--ctp-text); }
+
+    .mode-tab.active {
+      background: var(--ctp-surface1);
+      color: var(--ctp-text);
+    }
+
+    .mode-tab.active.work { background: var(--ctp-red); color: var(--ctp-crust); }
+    .mode-tab.active.short-break { background: var(--ctp-green); color: var(--ctp-crust); }
+    .mode-tab.active.long-break { background: var(--ctp-blue); color: var(--ctp-crust); }
+
+    .timer-display {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .timer-circle {
+      width: 280px;
+      height: 280px;
+      margin: 0 auto 1.5rem;
+      position: relative;
+    }
+
+    .timer-circle svg {
+      transform: rotate(-90deg);
+      width: 100%;
+      height: 100%;
+    }
+
+    .timer-circle .bg {
+      fill: none;
+      stroke: var(--ctp-surface0);
+      stroke-width: 8;
+    }
+
+    .timer-circle .progress {
+      fill: none;
+      stroke: var(--ctp-red);
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.5s ease, stroke 0.3s;
+    }
+
+    .timer-circle .progress.short-break { stroke: var(--ctp-green); }
+    .timer-circle .progress.long-break { stroke: var(--ctp-blue); }
+
+    .timer-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .timer-time {
+      font-size: 4rem;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.05em;
+    }
+
+    .timer-label {
+      font-size: 1rem;
+      color: var(--ctp-subtext0);
+      margin-top: 0.25rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .btn {
+      padding: 0.875rem 2rem;
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: var(--ctp-green);
+      color: var(--ctp-crust);
+    }
+
+    .btn-primary:hover { filter: brightness(1.1); }
+
+    .btn-primary.paused {
+      background: var(--ctp-peach);
+    }
+
+    .btn-secondary {
+      background: var(--ctp-surface1);
+      color: var(--ctp-text);
+    }
+
+    .btn-secondary:hover { background: var(--ctp-surface2); }
+
+    .session-info {
+      text-align: center;
+      color: var(--ctp-subtext0);
+      font-size: 0.875rem;
+      margin-bottom: 2rem;
+    }
+
+    .session-dots {
+      display: flex;
+      gap: 0.5rem;
+      justify-content: center;
+      margin-top: 0.5rem;
+    }
+
+    .session-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      background: var(--ctp-surface1);
+      transition: background 0.3s;
+    }
+
+    .session-dot.completed { background: var(--ctp-red); }
+
+    .settings-toggle {
+      position: fixed;
+      top: 1rem;
+      right: 1rem;
+      background: var(--ctp-surface0);
+      border: none;
+      color: var(--ctp-text);
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1.25rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: background 0.2s;
+    }
+
+    .settings-toggle:hover { background: var(--ctp-surface1); }
+
+    .settings-panel {
+      position: fixed;
+      top: 0;
+      right: -400px;
+      width: 380px;
+      max-width: 100vw;
+      height: 100vh;
+      background: var(--ctp-mantle);
+      border-left: 1px solid var(--ctp-surface0);
+      padding: 1.5rem;
+      overflow-y: auto;
+      transition: right 0.3s ease;
+      z-index: 100;
+    }
+
+    .settings-panel.open { right: 0; }
+
+    .settings-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s;
+      z-index: 99;
+    }
+
+    .settings-overlay.open { opacity: 1; pointer-events: all; }
+
+    .settings-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .settings-header h2 {
+      font-size: 1.25rem;
+      color: var(--ctp-text);
+    }
+
+    .settings-close {
+      background: none;
+      border: none;
+      color: var(--ctp-subtext0);
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .settings-close:hover { color: var(--ctp-text); }
+
+    .settings-section {
+      margin-bottom: 1.5rem;
+    }
+
+    .settings-section h3 {
+      font-size: 0.875rem;
+      color: var(--ctp-subtext1);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      margin-bottom: 0.75rem;
+    }
+
+    .setting-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.75rem 0;
+      border-bottom: 1px solid var(--ctp-surface0);
+    }
+
+    .setting-row:last-child { border-bottom: none; }
+
+    .setting-row label {
+      font-size: 0.9375rem;
+      color: var(--ctp-text);
+    }
+
+    .setting-row input[type="number"] {
+      width: 70px;
+      padding: 0.5rem;
+      background: var(--ctp-surface0);
+      border: 1px solid var(--ctp-surface1);
+      border-radius: 8px;
+      color: var(--ctp-text);
+      font-size: 0.9375rem;
+      text-align: center;
+    }
+
+    .setting-row input[type="number"]:focus {
+      outline: none;
+      border-color: var(--ctp-blue);
+    }
+
+    .setting-row input[type="time"] {
+      padding: 0.5rem;
+      background: var(--ctp-surface0);
+      border: 1px solid var(--ctp-surface1);
+      border-radius: 8px;
+      color: var(--ctp-text);
+      font-size: 0.9375rem;
+    }
+
+    .setting-row input[type="time"]:focus {
+      outline: none;
+      border-color: var(--ctp-blue);
+    }
+
+    .toggle-switch {
+      position: relative;
+      width: 48px;
+      height: 26px;
+    }
+
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .toggle-slider {
+      position: absolute;
+      cursor: pointer;
+      inset: 0;
+      background: var(--ctp-surface1);
+      border-radius: 26px;
+      transition: 0.3s;
+    }
+
+    .toggle-slider:before {
+      content: '';
+      position: absolute;
+      height: 20px;
+      width: 20px;
+      left: 3px;
+      bottom: 3px;
+      background: var(--ctp-text);
+      border-radius: 50%;
+      transition: 0.3s;
+    }
+
+    .toggle-switch input:checked + .toggle-slider {
+      background: var(--ctp-green);
+    }
+
+    .toggle-switch input:checked + .toggle-slider:before {
+      transform: translateX(22px);
+    }
+
+    .workday-settings {
+      max-height: 0;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .workday-settings.visible {
+      max-height: 300px;
+    }
+
+    .workday-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0.5rem 0;
+    }
+
+    .workday-row label {
+      font-size: 0.875rem;
+      color: var(--ctp-subtext1);
+    }
+
+    .btn-save {
+      width: 100%;
+      padding: 0.875rem;
+      background: var(--ctp-blue);
+      color: var(--ctp-crust);
+      border: none;
+      border-radius: 12px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 1rem;
+    }
+
+    .btn-save:hover { filter: brightness(1.1); }
+
+    .sync-info {
+      background: var(--ctp-surface0);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 0.75rem;
+      font-size: 0.8125rem;
+      color: var(--ctp-subtext0);
+      line-height: 1.5;
+    }
+
+    .sync-info strong { color: var(--ctp-text); }
+
+    .notification-section {
+      background: var(--ctp-surface0);
+      border-radius: 8px;
+      padding: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .notification-section .setting-row {
+      border-bottom-color: var(--ctp-surface1);
+      padding: 0.5rem 0;
+    }
+
+    .btn-test-sound {
+      width: 100%;
+      padding: 0.5rem;
+      background: var(--ctp-surface1);
+      color: var(--ctp-text);
+      border: none;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      cursor: pointer;
+      margin-top: 0.5rem;
+      transition: background 0.2s;
+    }
+
+    .btn-test-sound:hover { background: var(--ctp-surface2); }
+
+    .next-session {
+      text-align: center;
+      font-size: 0.8125rem;
+      color: var(--ctp-subtext0);
+      margin-top: 0.5rem;
+    }
+
+    @media (max-width: 480px) {
+      .container { padding: 1rem; }
+      .timer-circle { width: 240px; height: 240px; }
+      .timer-time { font-size: 3rem; }
+      .settings-panel { width: 100vw; }
+    }
+  </style>
+</head>
+<body>
+  <button class="settings-toggle" id="settingsToggle" aria-label="Настройки">&#9881;</button>
+
+  <div class="settings-overlay" id="settingsOverlay"></div>
+
+  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-header">
+      <h2>Настройки</h2>
+      <button class="settings-close" id="settingsClose">&times;</button>
+    </div>
+
+    <div class="settings-section">
+      <h3>Длительность (мин)</h3>
+      <div class="setting-row">
+        <label>Работа</label>
+        <input type="number" id="workDuration" min="1" max="120" value="25">
+      </div>
+      <div class="setting-row">
+        <label>Короткий перерыв</label>
+        <input type="number" id="shortBreakDuration" min="1" max="30" value="5">
+      </div>
+      <div class="setting-row">
+        <label>Длинный перерыв</label>
+        <input type="number" id="longBreakDuration" min="1" max="60" value="15">
+      </div>
+      <div class="setting-row">
+        <label>Сессий до длинного перерыва</label>
+        <input type="number" id="sessionsBeforeLongBreak" min="2" max="10" value="4">
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Синхронизация</h3>
+      <div class="setting-row">
+        <label>Синхрон с рабочим днём</label>
+        <label class="toggle-switch">
+          <input type="checkbox" id="workdaySync">
+          <span class="toggle-slider"></span>
+        </label>
+      </div>
+
+      <div class="workday-settings" id="workdaySettings">
+        <div class="workday-row">
+          <label>Начало рабочего дня</label>
+          <input type="time" id="workdayStart" value="09:00">
+        </div>
+        <div class="workday-row">
+          <label>Начало обеда</label>
+          <input type="time" id="lunchStart" value="13:00">
+        </div>
+        <div class="workday-row">
+          <label>Конец обеда</label>
+          <input type="time" id="lunchEnd" value="14:00">
+        </div>
+        <div class="workday-row">
+          <label>Конец рабочего дня</label>
+          <input type="time" id="workdayEnd" value="18:00">
+        </div>
+        <div class="sync-info">
+          <strong>Как работает:</strong> Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.
+        </div>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3>Уведомления</h3>
+      <div class="notification-section">
+        <div class="setting-row">
+          <label>Звук</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="soundEnabled" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="setting-row">
+          <label>Браузерные уведомления</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="browserNotification" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <button class="btn-test-sound" id="testSoundBtn">&#128264; Проверить звук</button>
+      </div>
+    </div>
+
+    <button class="btn-save" id="saveSettings">Сохранить</button>
+  </div>
+
+  <div class="container">
+    <div class="mode-tabs">
+      <button class="mode-tab active work" data-mode="work">Работа</button>
+      <button class="mode-tab short-break" data-mode="shortBreak">Короткий</button>
+      <button class="mode-tab long-break" data-mode="longBreak">Длинный</button>
+    </div>
+
+    <div class="timer-display">
+      <div class="timer-circle">
+        <svg viewBox="0 0 280 280">
+          <circle class="bg" cx="140" cy="140" r="130"></circle>
+          <circle class="progress" id="progressCircle" cx="140" cy="140" r="130"
+                  stroke-dasharray="816.81" stroke-dashoffset="0"></circle>
+        </svg>
+        <div class="timer-text">
+          <div class="timer-time" id="timerTime">25:00</div>
+          <div class="timer-label" id="timerLabel">Фокус</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <button class="btn btn-secondary" id="resetBtn">Сброс</button>
+      <button class="btn btn-primary" id="startBtn">Старт</button>
+      <button class="btn btn-secondary" id="skipBtn">Пропуск</button>
+    </div>
+
+    <div class="session-info">
+      <span>Сессия <span id="currentSession">1</span> / <span id="totalSessions">4</span></span>
+      <div class="session-dots" id="sessionDots"></div>
+    </div>
+
+    <div class="next-session" id="nextSession"></div>
+  </div>
+
+  <script>
+    const CIRCUMFERENCE = 2 * Math.PI * 130;
+
+    let settings = {
+      workDuration: 25,
+      shortBreakDuration: 5,
+      longBreakDuration: 15,
+      sessionsBeforeLongBreak: 4,
+      workdaySync: false,
+      workdayStart: '09:00',
+      lunchStart: '13:00',
+      lunchEnd: '14:00',
+      workdayEnd: '18:00',
+      soundEnabled: true,
+      browserNotification: true
+    };
+
+    let state = {
+      mode: 'work',
+      timeLeft: settings.workDuration * 60,
+      totalTime: settings.workDuration * 60,
+      running: false,
+      currentSession: 1,
+      intervalId: null,
+      syncedStartTime: null
+    };
+
+    const $ = id => document.getElementById(id);
+
+    function formatTime(seconds) {
+      const m = Math.floor(Math.abs(seconds) / 60);
+      const s = Math.abs(seconds) % 60;
+      return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+    }
+
+    function updateDisplay() {
+      $('timerTime').textContent = formatTime(state.timeLeft);
+      const progress = 1 - (state.timeLeft / state.totalTime);
+      $('progressCircle').style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
+      document.title = `${formatTime(state.timeLeft)} - Pomodoro`;
+    }
+
+    function updateModeTabs() {
+      document.querySelectorAll('.mode-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.mode === state.mode) tab.classList.add('active');
+      });
+
+      const circle = $('progressCircle');
+      circle.classList.remove('short-break', 'long-break');
+      if (state.mode === 'shortBreak') circle.classList.add('short-break');
+      if (state.mode === 'longBreak') circle.classList.add('long-break');
+
+      const labels = { work: 'Фокус', shortBreak: 'Короткий перерыв', longBreak: 'Длинный перерыв' };
+      $('timerLabel').textContent = labels[state.mode];
+    }
+
+    function updateSessionDots() {
+      const container = $('sessionDots');
+      container.innerHTML = '';
+      for (let i = 1; i <= settings.sessionsBeforeLongBreak; i++) {
+        const dot = document.createElement('div');
+        dot.className = 'session-dot' + (i < state.currentSession ? ' completed' : '');
+        container.appendChild(dot);
+      }
+      $('currentSession').textContent = state.currentSession;
+      $('totalSessions').textContent = settings.sessionsBeforeLongBreak;
+    }
+
+    function getDuration(mode) {
+      switch (mode) {
+        case 'work': return settings.workDuration * 60;
+        case 'shortBreak': return settings.shortBreakDuration * 60;
+        case 'longBreak': return settings.longBreakDuration * 60;
+      }
+    }
+
+    function switchMode(mode, resetTimer = true) {
+      state.mode = mode;
+      if (resetTimer) {
+        state.timeLeft = getDuration(mode);
+        state.totalTime = getDuration(mode);
+      }
+      updateModeTabs();
+      updateDisplay();
+      updateSessionDots();
+    }
+
+    function getNextMode() {
+      if (state.mode === 'work') {
+        return state.currentSession >= settings.sessionsBeforeLongBreak ? 'longBreak' : 'shortBreak';
+      }
+      if (state.mode === 'shortBreak') {
+        state.currentSession++;
+        return 'work';
+      }
+      state.currentSession = 1;
+      return 'work';
+    }
+
+    let audioCtx = null;
+
+    function getAudioContext() {
+      if (!audioCtx || audioCtx.state === 'closed') {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      }
+      if (audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+      return audioCtx;
+    }
+
+    function playTone(ctx, freq, startTime, duration, type = 'sine', volume = 0.3) {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = type;
+      gain.gain.setValueAtTime(0, startTime);
+      gain.gain.linearRampToValueAtTime(volume, startTime + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      osc.start(startTime);
+      osc.stop(startTime + duration);
+    }
+
+    function playWorkEndSound() {
+      if (!settings.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        playTone(ctx, 523.25, now, 0.3, 'sine', 0.3);
+        playTone(ctx, 659.25, now + 0.15, 0.3, 'sine', 0.3);
+        playTone(ctx, 783.99, now + 0.3, 0.4, 'sine', 0.3);
+        playTone(ctx, 1046.50, now + 0.5, 0.5, 'sine', 0.25);
+      } catch (e) {}
+    }
+
+    function playBreakEndSound() {
+      if (!settings.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        playTone(ctx, 783.99, now, 0.2, 'triangle', 0.25);
+        playTone(ctx, 659.25, now + 0.2, 0.2, 'triangle', 0.25);
+        playTone(ctx, 523.25, now + 0.4, 0.4, 'triangle', 0.3);
+      } catch (e) {}
+    }
+
+    function playTestSound() {
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        playTone(ctx, 440, now, 0.15, 'sine', 0.2);
+        playTone(ctx, 554.37, now + 0.15, 0.15, 'sine', 0.2);
+        playTone(ctx, 659.25, now + 0.3, 0.25, 'sine', 0.2);
+      } catch (e) {}
+    }
+
+    function triggerNotification(isWorkEnding) {
+      if (settings.soundEnabled) {
+        isWorkEnding ? playWorkEndSound() : playBreakEndSound();
+      }
+
+      if (settings.browserNotification && 'Notification' in window && Notification.permission === 'granted') {
+        const title = isWorkEnding ? 'Pomodoro' : 'Pomodoro';
+        const body = isWorkEnding ? 'Время перерыва!' : 'Время работать!';
+        new Notification(title, { body });
+      }
+    }
+
+    function tick() {
+      if (state.timeLeft <= 0) {
+        clearInterval(state.intervalId);
+        state.running = false;
+        triggerNotification(state.mode === 'work');
+
+        const nextMode = getNextMode();
+        switchMode(nextMode);
+        $('startBtn').textContent = 'Старт';
+        $('startBtn').classList.remove('paused');
+        return;
+      }
+
+      if (settings.workdaySync && state.mode === 'work') {
+        const synced = calculateSyncedTime();
+        if (synced !== null) {
+          state.timeLeft = synced.timeLeft;
+          state.totalTime = synced.totalTime;
+          if (synced.mode !== state.mode) {
+            state.mode = synced.mode;
+            updateModeTabs();
+          }
+          updateDisplay();
+          return;
+        }
+      }
+
+      state.timeLeft--;
+      updateDisplay();
+    }
+
+    function calculateSyncedTime() {
+      const now = new Date();
+      const [startH, startM] = settings.workdayStart.split(':').map(Number);
+      const [endH, endM] = settings.workdayEnd.split(':').map(Number);
+      const [lunchSH, lunchSM] = settings.lunchStart.split(':').map(Number);
+      const [lunchEH, lunchEM] = settings.lunchEnd.split(':').map(Number);
+
+      const workdayStartMin = startH * 60 + startM;
+      const workdayEndMin = endH * 60 + endM;
+      const lunchStartMin = lunchSH * 60 + lunchSM;
+      const lunchEndMin = lunchEH * 60 + lunchEM;
+
+      const currentMin = now.getHours() * 60 + now.getMinutes();
+      const currentSec = now.getSeconds();
+      const currentTotalSec = currentMin * 60 + currentSec;
+
+      if (currentTotalSec < workdayStartMin * 60 || currentTotalSec >= workdayEndMin * 60) {
+        return null;
+      }
+
+      if (currentTotalSec >= lunchStartMin * 60 && currentTotalSec < lunchEndMin * 60) {
+        return null;
+      }
+
+      let elapsed = currentTotalSec - workdayStartMin * 60;
+      if (currentTotalSec >= lunchEndMin * 60) {
+        elapsed -= (lunchEndMin - lunchStartMin) * 60;
+      }
+
+      const workSec = settings.workDuration * 60;
+      const shortBreakSec = settings.shortBreakDuration * 60;
+      const longBreakSec = settings.longBreakDuration * 60;
+
+      let accumulated = 0;
+      let session = 1;
+
+      while (true) {
+        const workEnd = accumulated + workSec;
+        if (elapsed < workEnd) {
+          const timeLeft = workEnd - elapsed;
+          return {
+            timeLeft,
+            totalTime: workSec,
+            mode: 'work'
+          };
+        }
+        accumulated = workEnd;
+
+        const isLongBreak = session >= settings.sessionsBeforeLongBreak;
+        const breakSec = isLongBreak ? longBreakSec : shortBreakSec;
+        const breakEnd = accumulated + breakSec;
+
+        if (elapsed < breakEnd) {
+          const timeLeft = breakEnd - elapsed;
+          return {
+            timeLeft,
+            totalTime: breakSec,
+            mode: isLongBreak ? 'longBreak' : 'shortBreak'
+          };
+        }
+        accumulated = breakEnd;
+
+        if (isLongBreak) session = 1;
+        else session++;
+      }
+    }
+
+    function startTimer() {
+      if (state.running) {
+        clearInterval(state.intervalId);
+        state.running = false;
+        $('startBtn').textContent = 'Старт';
+        $('startBtn').classList.add('paused');
+        return;
+      }
+
+      if (settings.workdaySync && state.mode === 'work') {
+        const synced = calculateSyncedTime();
+        if (synced) {
+          state.timeLeft = synced.timeLeft;
+          state.totalTime = synced.totalTime;
+          state.mode = synced.mode;
+          updateModeTabs();
+          updateDisplay();
+        }
+      }
+
+      state.running = true;
+      $('startBtn').textContent = 'Пауза';
+      $('startBtn').classList.remove('paused');
+      state.intervalId = setInterval(tick, 1000);
+    }
+
+    function resetTimer() {
+      clearInterval(state.intervalId);
+      state.running = false;
+      state.currentSession = 1;
+      switchMode('work');
+      $('startBtn').textContent = 'Старт';
+      $('startBtn').classList.remove('paused');
+    }
+
+    function skipSession() {
+      clearInterval(state.intervalId);
+      state.running = false;
+      const nextMode = getNextMode();
+      switchMode(nextMode);
+      $('startBtn').textContent = 'Старт';
+      $('startBtn').classList.remove('paused');
+    }
+
+    async function loadSettings() {
+      try {
+        const res = await fetch('/api/settings');
+        const data = await res.json();
+        settings = { ...settings, ...data };
+        applySettings();
+      } catch (e) {
+        console.warn('Failed to load settings:', e);
+      }
+      return settings;
+    }
+
+    function applySettings() {
+      $('workDuration').value = settings.workDuration;
+      $('shortBreakDuration').value = settings.shortBreakDuration;
+      $('longBreakDuration').value = settings.longBreakDuration;
+      $('sessionsBeforeLongBreak').value = settings.sessionsBeforeLongBreak;
+      $('workdaySync').checked = settings.workdaySync;
+      $('workdayStart').value = settings.workdayStart;
+      $('lunchStart').value = settings.lunchStart;
+      $('lunchEnd').value = settings.lunchEnd;
+      $('workdayEnd').value = settings.workdayEnd;
+      $('soundEnabled').checked = settings.soundEnabled;
+      $('browserNotification').checked = settings.browserNotification;
+
+      toggleWorkdaySettings();
+
+      if (!state.running) {
+        switchMode(state.mode);
+      }
+    }
+
+    function toggleWorkdaySettings() {
+      $('workdaySettings').classList.toggle('visible', $('workdaySync').checked);
+    }
+
+    async function saveSettings() {
+      const newSettings = {
+        workDuration: parseInt($('workDuration').value) || 25,
+        shortBreakDuration: parseInt($('shortBreakDuration').value) || 5,
+        longBreakDuration: parseInt($('longBreakDuration').value) || 15,
+        sessionsBeforeLongBreak: parseInt($('sessionsBeforeLongBreak').value) || 4,
+        workdaySync: $('workdaySync').checked,
+        workdayStart: $('workdayStart').value || '09:00',
+        lunchStart: $('lunchStart').value || '13:00',
+        lunchEnd: $('lunchEnd').value || '14:00',
+        workdayEnd: $('workdayEnd').value || '18:00',
+        soundEnabled: $('soundEnabled').checked,
+        browserNotification: $('browserNotification').checked
+      };
+
+      try {
+        await fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(newSettings)
+        });
+        settings = newSettings;
+
+        if (!state.running) {
+          state.timeLeft = getDuration(state.mode);
+          state.totalTime = getDuration(state.mode);
+          updateDisplay();
+        }
+        updateSessionDots();
+
+        $('settingsPanel').classList.remove('open');
+        $('settingsOverlay').classList.remove('open');
+      } catch (e) {
+        console.error('Failed to save settings:', e);
+      }
+    }
+
+    function openSettings() {
+      $('settingsPanel').classList.add('open');
+      $('settingsOverlay').classList.add('open');
+    }
+
+    function closeSettings() {
+      $('settingsPanel').classList.remove('open');
+      $('settingsOverlay').classList.remove('open');
+    }
+
+    document.querySelectorAll('.mode-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        if (state.running) return;
+        switchMode(tab.dataset.mode);
+      });
+    });
+
+    $('startBtn').addEventListener('click', startTimer);
+    $('resetBtn').addEventListener('click', resetTimer);
+    $('skipBtn').addEventListener('click', skipSession);
+    $('settingsToggle').addEventListener('click', openSettings);
+    $('settingsClose').addEventListener('click', closeSettings);
+    $('settingsOverlay').addEventListener('click', closeSettings);
+    $('saveSettings').addEventListener('click', saveSettings);
+    $('workdaySync').addEventListener('change', toggleWorkdaySettings);
+    $('testSoundBtn').addEventListener('click', playTestSound);
+    $('browserNotification').addEventListener('change', (e) => {
+      if (e.target.checked && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    });
+
+    loadSettings().then(() => {
+      if (settings.browserNotification && 'Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+      }
+    });
+    updateDisplay();
+    updateSessionDots();
+  </script>
+</body>
+</html>
