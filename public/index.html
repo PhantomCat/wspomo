@@ -40,7 +40,15 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+    }
+
+    .main-wrapper {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
       justify-content: center;
+      flex: 1;
+      width: 100%;
     }
 
     .container {
@@ -474,6 +482,48 @@
       margin-top: 0.5rem;
     }
 
+    .github-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      background: var(--ctp-surface0);
+      border: 1px solid var(--ctp-surface1);
+      border-radius: 10px;
+      color: var(--ctp-subtext1);
+      text-decoration: none;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .github-link:hover {
+      background: var(--ctp-surface1);
+      color: var(--ctp-text);
+      border-color: var(--ctp-overlay0);
+    }
+
+    .github-link svg {
+      width: 18px;
+      height: 18px;
+      fill: currentColor;
+    }
+
+    .github-link .star-icon {
+      color: var(--ctp-yellow);
+      transition: transform 0.2s;
+    }
+
+    .github-link:hover .star-icon {
+      transform: scale(1.15);
+    }
+
+    .footer {
+      margin-top: auto;
+      padding: 1.5rem 0;
+      text-align: center;
+    }
+
     @media (max-width: 480px) {
       .container { padding: 1rem; }
       .timer-circle { width: 240px; height: 240px; }
@@ -578,6 +628,7 @@
     <button class="btn-save" id="saveSettings" data-i18n="save">Сохранить</button>
   </div>
 
+  <div class="main-wrapper">
   <div class="container">
     <div class="mode-tabs">
       <button class="mode-tab active work" data-mode="work" data-i18n="work">Работа</button>
@@ -612,6 +663,15 @@
 
     <div class="next-session" id="nextSession"></div>
   </div>
+  </div>
+
+  <footer class="footer">
+    <a class="github-link" href="https://github.com/PhantomCat/wspomo" target="_blank" rel="noopener noreferrer">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+      <span class="star-icon">&#9733;</span>
+      <span data-i18n="starOnGithub">Star on GitHub</span>
+    </a>
+  </footer>
 
   <script>
     const CIRCUMFERENCE = 2 * Math.PI * 130;
@@ -648,7 +708,8 @@
         longBreakLabel: 'Длинный перерыв',
         breakTime: 'Время перерыва!',
         workTime: 'Время работать!',
-        pageTitle: ' - Помодоро'
+        pageTitle: ' - Помодоро',
+        starOnGithub: 'Star on GitHub'
       },
       en: {
         settings: 'Settings',
@@ -681,7 +742,8 @@
         longBreakLabel: 'Long break',
         breakTime: 'Time for a break!',
         workTime: 'Time to work!',
-        pageTitle: ' - Pomodoro'
+        pageTitle: ' - Pomodoro',
+        starOnGithub: 'Star on GitHub'
       }
     };
 
