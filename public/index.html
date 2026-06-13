@@ -442,6 +442,31 @@
 
     .btn-test-sound:hover { background: var(--ctp-surface2); }
 
+    .lang-selector {
+      display: flex;
+      gap: 0.5rem;
+      align-items: center;
+    }
+
+    .lang-btn {
+      padding: 0.375rem 0.75rem;
+      background: var(--ctp-surface1);
+      color: var(--ctp-subtext0);
+      border: 1px solid transparent;
+      border-radius: 8px;
+      font-size: 0.8125rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .lang-btn:hover { color: var(--ctp-text); }
+
+    .lang-btn.active {
+      background: var(--ctp-blue);
+      color: var(--ctp-crust);
+      border-color: var(--ctp-blue);
+    }
+
     .next-session {
       text-align: center;
       font-size: 0.8125rem;
@@ -462,36 +487,44 @@
 
   <div class="settings-overlay" id="settingsOverlay"></div>
 
-  <div class="settings-panel" id="settingsPanel">
+    <div class="settings-panel" id="settingsPanel">
     <div class="settings-header">
-      <h2>Настройки</h2>
+      <h2 id="settingsTitle">Настройки</h2>
       <button class="settings-close" id="settingsClose">&times;</button>
     </div>
 
     <div class="settings-section">
-      <h3>Длительность (мин)</h3>
+      <h3 id="langSectionTitle">Язык</h3>
+      <div class="lang-selector">
+        <button class="lang-btn active" data-lang="ru">Русский</button>
+        <button class="lang-btn" data-lang="en">English</button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <h3 id="durationSectionTitle">Длительность (мин)</h3>
       <div class="setting-row">
-        <label>Работа</label>
+        <label data-i18n="work">Работа</label>
         <input type="number" id="workDuration" min="1" max="120" value="25">
       </div>
       <div class="setting-row">
-        <label>Короткий перерыв</label>
+        <label data-i18n="shortBreak">Короткий перерыв</label>
         <input type="number" id="shortBreakDuration" min="1" max="30" value="5">
       </div>
       <div class="setting-row">
-        <label>Длинный перерыв</label>
+        <label data-i18n="longBreak">Длинный перерыв</label>
         <input type="number" id="longBreakDuration" min="1" max="60" value="15">
       </div>
       <div class="setting-row">
-        <label>Сессий до длинного перерыва</label>
+        <label data-i18n="sessionsBeforeLongBreak">Сессий до длинного перерыва</label>
         <input type="number" id="sessionsBeforeLongBreak" min="2" max="10" value="4">
       </div>
     </div>
 
     <div class="settings-section">
-      <h3>Синхронизация</h3>
+      <h3 id="syncSectionTitle">Синхронизация</h3>
       <div class="setting-row">
-        <label>Синхрон с рабочим днём</label>
+        <label data-i18n="workdaySync">Синхрон с рабочим днём</label>
         <label class="toggle-switch">
           <input type="checkbox" id="workdaySync">
           <span class="toggle-slider"></span>
@@ -500,56 +533,56 @@
 
       <div class="workday-settings" id="workdaySettings">
         <div class="workday-row">
-          <label>Начало рабочего дня</label>
+          <label data-i18n="workdayStart">Начало рабочего дня</label>
           <input type="time" id="workdayStart" value="09:00">
         </div>
         <div class="workday-row">
-          <label>Начало обеда</label>
+          <label data-i18n="lunchStart">Начало обеда</label>
           <input type="time" id="lunchStart" value="13:00">
         </div>
         <div class="workday-row">
-          <label>Конец обеда</label>
+          <label data-i18n="lunchEnd">Конец обеда</label>
           <input type="time" id="lunchEnd" value="14:00">
         </div>
         <div class="workday-row">
-          <label>Конец рабочего дня</label>
+          <label data-i18n="workdayEnd">Конец рабочего дня</label>
           <input type="time" id="workdayEnd" value="18:00">
         </div>
         <div class="sync-info">
-          <strong>Как работает:</strong> Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.
+          <strong data-i18n="howItWorksTitle">Как работает:</strong> <span data-i18n="howItWorksText">Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.</span>
         </div>
       </div>
     </div>
 
     <div class="settings-section">
-      <h3>Уведомления</h3>
+      <h3 id="notifSectionTitle">Уведомления</h3>
       <div class="notification-section">
         <div class="setting-row">
-          <label>Звук</label>
+          <label data-i18n="sound">Звук</label>
           <label class="toggle-switch">
             <input type="checkbox" id="soundEnabled" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
         <div class="setting-row">
-          <label>Браузерные уведомления</label>
+          <label data-i18n="browserNotif">Браузерные уведомления</label>
           <label class="toggle-switch">
             <input type="checkbox" id="browserNotification" checked>
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <button class="btn-test-sound" id="testSoundBtn">&#128264; Проверить звук</button>
+        <button class="btn-test-sound" id="testSoundBtn" data-i18n="testSound">&#128264; Проверить звук</button>
       </div>
     </div>
 
-    <button class="btn-save" id="saveSettings">Сохранить</button>
+    <button class="btn-save" id="saveSettings" data-i18n="save">Сохранить</button>
   </div>
 
   <div class="container">
     <div class="mode-tabs">
-      <button class="mode-tab active work" data-mode="work">Работа</button>
-      <button class="mode-tab short-break" data-mode="shortBreak">Короткий</button>
-      <button class="mode-tab long-break" data-mode="longBreak">Длинный</button>
+      <button class="mode-tab active work" data-mode="work" data-i18n="work">Работа</button>
+      <button class="mode-tab short-break" data-mode="shortBreak" data-i18n="shortBreak">Короткий</button>
+      <button class="mode-tab long-break" data-mode="longBreak" data-i18n="longBreak">Длинный</button>
     </div>
 
     <div class="timer-display">
@@ -567,13 +600,13 @@
     </div>
 
     <div class="controls">
-      <button class="btn btn-secondary" id="resetBtn">Сброс</button>
-      <button class="btn btn-primary" id="startBtn">Старт</button>
-      <button class="btn btn-secondary" id="skipBtn">Пропуск</button>
+      <button class="btn btn-secondary" id="resetBtn" data-i18n="reset">Сброс</button>
+      <button class="btn btn-primary" id="startBtn" data-i18n="start">Старт</button>
+      <button class="btn btn-secondary" id="skipBtn" data-i18n="skip">Пропуск</button>
     </div>
 
     <div class="session-info">
-      <span>Сессия <span id="currentSession">1</span> / <span id="totalSessions">4</span></span>
+      <span><span data-i18n="session">Сессия</span> <span id="currentSession">1</span> / <span id="totalSessions">4</span></span>
       <div class="session-dots" id="sessionDots"></div>
     </div>
 
@@ -582,6 +615,80 @@
 
   <script>
     const CIRCUMFERENCE = 2 * Math.PI * 130;
+
+    const translations = {
+      ru: {
+        settings: 'Настройки',
+        language: 'Язык',
+        durations: 'Длительность (мин)',
+        sync: 'Синхронизация',
+        notifications: 'Уведомления',
+        work: 'Работа',
+        shortBreak: 'Короткий перерыв',
+        longBreak: 'Длинный перерыв',
+        sessionsBeforeLongBreak: 'Сессий до длинного перерыва',
+        workdaySync: 'Синхрон с рабочим днём',
+        workdayStart: 'Начало рабочего дня',
+        lunchStart: 'Начало обеда',
+        lunchEnd: 'Конец обеда',
+        workdayEnd: 'Конец рабочего дня',
+        howItWorksTitle: 'Как работает:',
+        howItWorksText: 'Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.',
+        sound: 'Звук',
+        browserNotif: 'Браузерные уведомления',
+        testSound: '🔔 Проверить звук',
+        save: 'Сохранить',
+        start: 'Старт',
+        pause: 'Пауза',
+        reset: 'Сброс',
+        skip: 'Пропуск',
+        session: 'Сессия',
+        focus: 'Фокус',
+        shortBreakLabel: 'Короткий перерыв',
+        longBreakLabel: 'Длинный перерыв',
+        breakTime: 'Время перерыва!',
+        workTime: 'Время работать!',
+        pageTitle: ' - Помодоро'
+      },
+      en: {
+        settings: 'Settings',
+        language: 'Language',
+        durations: 'Duration (min)',
+        sync: 'Synchronization',
+        notifications: 'Notifications',
+        work: 'Work',
+        shortBreak: 'Short break',
+        longBreak: 'Long break',
+        sessionsBeforeLongBreak: 'Sessions before long break',
+        workdaySync: 'Sync with workday',
+        workdayStart: 'Workday start',
+        lunchStart: 'Lunch start',
+        lunchEnd: 'Lunch end',
+        workdayEnd: 'Workday end',
+        howItWorksTitle: 'How it works:',
+        howItWorksText: 'Timer is anchored to the hour start. If enabled at 09:15 — the chain starts from 09:00, and the timer shows remaining time of the current session. Lunch is skipped in calculations.',
+        sound: 'Sound',
+        browserNotif: 'Browser notifications',
+        testSound: '🔔 Test sound',
+        save: 'Save',
+        start: 'Start',
+        pause: 'Pause',
+        reset: 'Reset',
+        skip: 'Skip',
+        session: 'Session',
+        focus: 'Focus',
+        shortBreakLabel: 'Short break',
+        longBreakLabel: 'Long break',
+        breakTime: 'Time for a break!',
+        workTime: 'Time to work!',
+        pageTitle: ' - Pomodoro'
+      }
+    };
+
+    function detectBrowserLanguage() {
+      const lang = (navigator.language || navigator.userLanguage || 'ru').toLowerCase();
+      return lang.startsWith('en') ? 'en' : 'ru';
+    }
 
     let settings = {
       workDuration: 25,
@@ -594,7 +701,8 @@
       lunchEnd: '14:00',
       workdayEnd: '18:00',
       soundEnabled: true,
-      browserNotification: true
+      browserNotification: true,
+      language: detectBrowserLanguage()
     };
 
     let state = {
@@ -609,6 +717,38 @@
 
     const $ = id => document.getElementById(id);
 
+    function applyLanguage() {
+      const t = translations[settings.language] || translations.ru;
+      const htmlLang = settings.language === 'en' ? 'en' : 'ru';
+      document.documentElement.lang = htmlLang;
+
+      document.querySelectorAll('[data-i18n]').forEach(el => {
+        const key = el.getAttribute('data-i18n');
+        if (t[key] !== undefined) {
+          el.textContent = t[key];
+        }
+      });
+
+      $('settingsTitle').textContent = t.settings;
+      $('langSectionTitle').textContent = t.language;
+      $('durationSectionTitle').textContent = t.durations;
+      $('syncSectionTitle').textContent = t.sync;
+      $('notifSectionTitle').textContent = t.notifications;
+
+      document.querySelectorAll('.lang-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.lang === settings.language);
+      });
+
+      updateModeTabs();
+      updateStartButton();
+      document.title = `${formatTime(state.timeLeft)}${t.pageTitle}`;
+    }
+
+    function updateStartButton() {
+      const t = translations[settings.language] || translations.ru;
+      $('startBtn').textContent = state.running ? t.pause : t.start;
+    }
+
     function formatTime(seconds) {
       const m = Math.floor(Math.abs(seconds) / 60);
       const s = Math.abs(seconds) % 60;
@@ -619,7 +759,8 @@
       $('timerTime').textContent = formatTime(state.timeLeft);
       const progress = 1 - (state.timeLeft / state.totalTime);
       $('progressCircle').style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
-      document.title = `${formatTime(state.timeLeft)} - Pomodoro`;
+      const t = translations[settings.language] || translations.ru;
+      document.title = `${formatTime(state.timeLeft)}${t.pageTitle}`;
     }
 
     function updateModeTabs() {
@@ -633,7 +774,8 @@
       if (state.mode === 'shortBreak') circle.classList.add('short-break');
       if (state.mode === 'longBreak') circle.classList.add('long-break');
 
-      const labels = { work: 'Фокус', shortBreak: 'Короткий перерыв', longBreak: 'Длинный перерыв' };
+      const t = translations[settings.language] || translations.ru;
+      const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel };
       $('timerLabel').textContent = labels[state.mode];
     }
 
@@ -745,9 +887,9 @@
       }
 
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'granted') {
-        const title = isWorkEnding ? 'Pomodoro' : 'Pomodoro';
-        const body = isWorkEnding ? 'Время перерыва!' : 'Время работать!';
-        new Notification(title, { body });
+        const t = translations[settings.language] || translations.ru;
+        const body = isWorkEnding ? t.breakTime : t.workTime;
+        new Notification('Pomodoro', { body });
       }
     }
 
@@ -759,7 +901,7 @@
 
         const nextMode = getNextMode();
         switchMode(nextMode);
-        $('startBtn').textContent = 'Старт';
+        updateStartButton();
         $('startBtn').classList.remove('paused');
         return;
       }
@@ -853,7 +995,7 @@
       if (state.running) {
         clearInterval(state.intervalId);
         state.running = false;
-        $('startBtn').textContent = 'Старт';
+        updateStartButton();
         $('startBtn').classList.add('paused');
         return;
       }
@@ -870,7 +1012,7 @@
       }
 
       state.running = true;
-      $('startBtn').textContent = 'Пауза';
+      updateStartButton();
       $('startBtn').classList.remove('paused');
       state.intervalId = setInterval(tick, 1000);
     }
@@ -880,7 +1022,7 @@
       state.running = false;
       state.currentSession = 1;
       switchMode('work');
-      $('startBtn').textContent = 'Старт';
+      updateStartButton();
       $('startBtn').classList.remove('paused');
     }
 
@@ -889,7 +1031,7 @@
       state.running = false;
       const nextMode = getNextMode();
       switchMode(nextMode);
-      $('startBtn').textContent = 'Старт';
+      updateStartButton();
       $('startBtn').classList.remove('paused');
     }
 
@@ -919,6 +1061,7 @@
       $('browserNotification').checked = settings.browserNotification;
 
       toggleWorkdaySettings();
+      applyLanguage();
 
       if (!state.running) {
         switchMode(state.mode);
@@ -941,7 +1084,8 @@
         lunchEnd: $('lunchEnd').value || '14:00',
         workdayEnd: $('workdayEnd').value || '18:00',
         soundEnabled: $('soundEnabled').checked,
-        browserNotification: $('browserNotification').checked
+        browserNotification: $('browserNotification').checked,
+        language: settings.language
       };
 
       try {
@@ -996,6 +1140,13 @@
       if (e.target.checked && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
+    });
+
+    document.querySelectorAll('.lang-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        settings.language = btn.dataset.lang;
+        applyLanguage();
+      });
     });
 
     loadSettings().then(() => {
