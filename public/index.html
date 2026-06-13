@@ -1104,7 +1104,12 @@
       try {
         const res = await fetch('/api/settings');
         const data = await res.json();
-        settings = { ...settings, ...data };
+        if (data.language) {
+          settings = { ...settings, ...data };
+        } else {
+          const detectedLang = detectBrowserLanguage();
+          settings = { ...settings, ...data, language: detectedLang };
+        }
         applySettings();
       } catch (e) {
         console.warn('Failed to load settings:', e);
@@ -1211,6 +1216,11 @@
       btn.addEventListener('click', () => {
         settings.language = btn.dataset.lang;
         applyLanguage();
+        fetch('/api/settings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(settings)
+        }).catch(() => {});
       });
     });
 

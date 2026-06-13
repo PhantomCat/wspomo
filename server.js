@@ -42,7 +42,8 @@ function getDefaultSettings() {
     workdayStart: '09:00',
     lunchStart: '13:00',
     lunchEnd: '14:00',
-    workdayEnd: '18:00'
+    workdayEnd: '18:00',
+    language: null
   };
 }
 
