@@ -58,10 +58,17 @@
           <input type="time" id="workdayStart" value="09:00">
         </div>
         <div class="workday-row">
+          <label data-i18n="lunchEnabled">Обед</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="lunchEnabled" checked>
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div class="workday-row" id="lunchStartRow">
           <label data-i18n="lunchStart">Начало обеда</label>
           <input type="time" id="lunchStart" value="13:00">
         </div>
-        <div class="workday-row">
+        <div class="workday-row" id="lunchEndRow">
           <label data-i18n="lunchEnd">Конец обеда</label>
           <input type="time" id="lunchEnd" value="14:00">
         </div>
@@ -169,6 +176,7 @@
         sessionsBeforeLongBreak: 'Сессий до длинного перерыва',
         workdaySync: 'Синхрон с рабочим днём',
         workdayStart: 'Начало рабочего дня',
+        lunchEnabled: 'Обед',
         lunchStart: 'Начало обеда',
         lunchEnd: 'Конец обеда',
         workdayEnd: 'Конец рабочего дня',
@@ -206,6 +214,7 @@
         sessionsBeforeLongBreak: 'Sessions before long break',
         workdaySync: 'Sync with workday',
         workdayStart: 'Workday start',
+        lunchEnabled: 'Lunch',
         lunchStart: 'Lunch start',
         lunchEnd: 'Lunch end',
         workdayEnd: 'Workday end',
@@ -245,6 +254,7 @@
       sessionsBeforeLongBreak: 4,
       workdaySync: false,
       workdayStart: '09:00',
+      lunchEnabled: true,
       lunchStart: '13:00',
       lunchEnd: '14:00',
       workdayEnd: '18:00',
@@ -548,13 +558,9 @@
 
       const [startH, startM] = settings.workdayStart.split(':').map(Number);
       const [endH, endM] = settings.workdayEnd.split(':').map(Number);
-      const [lunchSH, lunchSM] = settings.lunchStart.split(':').map(Number);
-      const [lunchEH, lunchEM] = settings.lunchEnd.split(':').map(Number);
 
       const workdayStartSec = (startH * 60 + startM) * 60;
       const workdayEndSec = (endH * 60 + endM) * 60;
-      const lunchStartSec = (lunchSH * 60 + lunchSM) * 60;
-      const lunchEndSec = (lunchEH * 60 + lunchEM) * 60;
 
       const currentSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
@@ -566,13 +572,27 @@
         return { type: 'after-work' };
       }
 
-      if (currentSec >= lunchStartSec && currentSec < lunchEndSec) {
-        return { type: 'lunch', timeLeft: Math.ceil((lunchEndSec - currentSec)) };
-      }
+      let elapsed;
 
-      let elapsed = currentSec - workdayStartSec;
-      if (currentSec >= lunchEndSec) {
-        elapsed -= (lunchEndSec - lunchStartSec);
+      if (settings.lunchEnabled) {
+        const [lunchSH, lunchSM] = settings.lunchStart.split(':').map(Number);
+        const [lunchEH, lunchEM] = settings.lunchEnd.split(':').map(Number);
+        const lunchStartSec = (lunchSH * 60 + lunchSM) * 60;
+        const lunchEndSec = (lunchEH * 60 + lunchEM) * 60;
+
+        if (currentSec < lunchStartSec) {
+          elapsed = currentSec - workdayStartSec;
+        } else if (currentSec >= lunchStartSec && currentSec < lunchEndSec) {
+          return {
+            type: 'lunch',
+            timeLeft: Math.ceil(lunchEndSec - currentSec),
+            totalTime: lunchEndSec - lunchStartSec
+          };
+        } else {
+          elapsed = currentSec - lunchEndSec;
+        }
+      } else {
+        elapsed = currentSec - workdayStartSec;
       }
 
       const workSec = settings.workDuration * 60;
@@ -612,6 +632,79 @@
 
         if (isLongBreak) session = 1;
         else session++;
+      }
+    }
+
+    function validateLunchTimes() {
+      const workdayStart = $('workdayStart').value;
+      const workdayEnd = $('workdayEnd').value;
+      const lunchStart = $('lunchStart').value;
+      const lunchEnd = $('lunchEnd').value;
+
+      if (!workdayStart || !workdayEnd || !lunchStart || !lunchEnd) {
+        return { valid: false };
+      }
+
+      const [wsH, wsM] = workdayStart.split(':').map(Number);
+      const [weH, weM] = workdayEnd.split(':').map(Number);
+      const [lsH, lsM] = lunchStart.split(':').map(Number);
+      const [leH, leM] = lunchEnd.split(':').map(Number);
+
+      const wsMin = wsH * 60 + wsM;
+      const weMin = weH * 60 + weM;
+      const lsMin = lsH * 60 + lsM;
+      const leMin = leH * 60 + leM;
+
+      if (lsMin <= wsMin) {
+        return { valid: false };
+      }
+
+      if (leMin <= lsMin) {
+        return { valid: false };
+      }
+
+      if (lsMin >= weMin) {
+        return { valid: false };
+      }
+
+      if (leMin > weMin) {
+        return { valid: false, adjustedWorkdayEnd: lunchStart };
+      }
+
+      return { valid: true };
+    }
+
+    function toggleLunchFields() {
+      const validation = validateLunchTimes();
+      const lunchEnabled = $('lunchEnabled').checked;
+
+      const lunchStartRow = $('lunchStartRow');
+      const lunchEndRow = $('lunchEndRow');
+
+      if (!validation.valid) {
+        $('lunchEnabled').checked = false;
+        lunchStartRow.classList.add('disabled');
+        lunchEndRow.classList.add('disabled');
+        $('lunchStart').disabled = true;
+        $('lunchEnd').disabled = true;
+
+        if (validation.adjustedWorkdayEnd) {
+          $('workdayEnd').value = validation.adjustedWorkdayEnd;
+        }
+
+        settings.lunchEnabled = false;
+      } else if (lunchEnabled) {
+        lunchStartRow.classList.remove('disabled');
+        lunchEndRow.classList.remove('disabled');
+        $('lunchStart').disabled = false;
+        $('lunchEnd').disabled = false;
+        settings.lunchEnabled = true;
+      } else {
+        lunchStartRow.classList.add('disabled');
+        lunchEndRow.classList.add('disabled');
+        $('lunchStart').disabled = true;
+        $('lunchEnd').disabled = true;
+        settings.lunchEnabled = false;
       }
     }
 
@@ -711,6 +804,7 @@
       $('longBreakDuration').value = settings.longBreakDuration;
       $('sessionsBeforeLongBreak').value = settings.sessionsBeforeLongBreak;
       $('workdayStart').value = settings.workdayStart;
+      $('lunchEnabled').checked = settings.lunchEnabled;
       $('lunchStart').value = settings.lunchStart;
       $('lunchEnd').value = settings.lunchEnd;
       $('workdayEnd').value = settings.workdayEnd;
@@ -722,6 +816,7 @@
         cb.checked = workDays.includes(parseInt(cb.value));
       });
 
+      toggleLunchFields();
       updateSyncToggle();
       applyLanguage();
       applyTheme();
@@ -744,6 +839,7 @@
         sessionsBeforeLongBreak: parseInt($('sessionsBeforeLongBreak').value) || 4,
         workdaySync: settings.workdaySync,
         workdayStart: $('workdayStart').value || '09:00',
+        lunchEnabled: $('lunchEnabled').checked,
         lunchStart: $('lunchStart').value || '13:00',
         lunchEnd: $('lunchEnd').value || '14:00',
         workdayEnd: $('workdayEnd').value || '18:00',
@@ -801,6 +897,12 @@
     $('settingsOverlay').addEventListener('click', closeSettings);
     $('saveSettings').addEventListener('click', saveSettings);
     $('testSoundBtn').addEventListener('click', playTestSound);
+
+    $('lunchEnabled').addEventListener('change', toggleLunchFields);
+    $('workdayStart').addEventListener('change', toggleLunchFields);
+    $('workdayEnd').addEventListener('change', toggleLunchFields);
+    $('lunchStart').addEventListener('change', toggleLunchFields);
+    $('lunchEnd').addEventListener('change', toggleLunchFields);
 
     function updateSyncToggle() {
       $('syncToggle').classList.toggle('active', settings.workdaySync);

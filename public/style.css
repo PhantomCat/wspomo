@@ -491,6 +491,15 @@ input[type="time"]:focus {
   padding: 0.5rem 0;
 }
 
+.workday-row.disabled {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.workday-row.disabled input {
+  cursor: not-allowed;
+}
+
 .workday-row label {
   font-size: 0.875rem;
   color: var(--ctp-subtext1);
