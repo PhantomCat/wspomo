@@ -635,20 +635,11 @@
       }
     }
 
-    function validateLunchTimes() {
-      const workdayStart = $('workdayStart').value;
-      const workdayEnd = $('workdayEnd').value;
-      const lunchStart = $('lunchStart').value;
-      const lunchEnd = $('lunchEnd').value;
-
-      if (!workdayStart || !workdayEnd || !lunchStart || !lunchEnd) {
-        return { valid: false };
-      }
-
-      const [wsH, wsM] = workdayStart.split(':').map(Number);
-      const [weH, weM] = workdayEnd.split(':').map(Number);
-      const [lsH, lsM] = lunchStart.split(':').map(Number);
-      const [leH, leM] = lunchEnd.split(':').map(Number);
+    function validateLunchTimes(settingsObj) {
+      const [wsH, wsM] = settingsObj.workdayStart.split(':').map(Number);
+      const [weH, weM] = settingsObj.workdayEnd.split(':').map(Number);
+      const [lsH, lsM] = settingsObj.lunchStart.split(':').map(Number);
+      const [leH, leM] = settingsObj.lunchEnd.split(':').map(Number);
 
       const wsMin = wsH * 60 + wsM;
       const weMin = weH * 60 + weM;
@@ -656,55 +647,39 @@
       const leMin = leH * 60 + leM;
 
       if (lsMin <= wsMin) {
-        return { valid: false };
+        return { valid: false, reason: 'Обед начинается до или в момент начала рабочего дня' };
       }
 
       if (leMin <= lsMin) {
-        return { valid: false };
+        return { valid: false, reason: 'Конец обеда должен быть после начала обеда' };
       }
 
       if (lsMin >= weMin) {
-        return { valid: false };
+        return { valid: false, reason: 'Обед начинается после или в момент конца рабочего дня' };
       }
 
-      if (leMin > weMin) {
-        return { valid: false, adjustedWorkdayEnd: lunchStart };
+      if (leMin >= weMin) {
+        return { valid: false, reason: 'Конец обеда выходит за пределы рабочего дня', adjustedWorkdayEnd: settingsObj.lunchStart };
       }
 
       return { valid: true };
     }
 
     function toggleLunchFields() {
-      const validation = validateLunchTimes();
       const lunchEnabled = $('lunchEnabled').checked;
-
       const lunchStartRow = $('lunchStartRow');
       const lunchEndRow = $('lunchEndRow');
 
-      if (!validation.valid) {
-        $('lunchEnabled').checked = false;
-        lunchStartRow.classList.add('disabled');
-        lunchEndRow.classList.add('disabled');
-        $('lunchStart').disabled = true;
-        $('lunchEnd').disabled = true;
-
-        if (validation.adjustedWorkdayEnd) {
-          $('workdayEnd').value = validation.adjustedWorkdayEnd;
-        }
-
-        settings.lunchEnabled = false;
-      } else if (lunchEnabled) {
+      if (lunchEnabled) {
         lunchStartRow.classList.remove('disabled');
         lunchEndRow.classList.remove('disabled');
         $('lunchStart').disabled = false;
         $('lunchEnd').disabled = false;
-        settings.lunchEnabled = true;
       } else {
         lunchStartRow.classList.add('disabled');
         lunchEndRow.classList.add('disabled');
         $('lunchStart').disabled = true;
         $('lunchEnd').disabled = true;
-        settings.lunchEnabled = false;
       }
     }
 
@@ -850,6 +825,22 @@
         theme: settings.theme
       };
 
+      if (newSettings.lunchEnabled) {
+        const validation = validateLunchTimes(newSettings);
+        if (!validation.valid) {
+          if (validation.adjustedWorkdayEnd) {
+            alert(`${validation.reason}. Рабочий день скорректирован до ${validation.adjustedWorkdayEnd}. Обед будет отключен.`);
+            newSettings.workdayEnd = validation.adjustedWorkdayEnd;
+          } else {
+            alert(`${validation.reason}. Обед будет отключен.`);
+          }
+          newSettings.lunchEnabled = false;
+          $('lunchEnabled').checked = false;
+          $('workdayEnd').value = newSettings.workdayEnd;
+          toggleLunchFields();
+        }
+      }
+
       try {
         await fetch('/api/settings', {
           method: 'POST',
@@ -899,10 +890,6 @@
     $('testSoundBtn').addEventListener('click', playTestSound);
 
     $('lunchEnabled').addEventListener('change', toggleLunchFields);
-    $('workdayStart').addEventListener('change', toggleLunchFields);
-    $('workdayEnd').addEventListener('change', toggleLunchFields);
-    $('lunchStart').addEventListener('change', toggleLunchFields);
-    $('lunchEnd').addEventListener('change', toggleLunchFields);
 
     function updateSyncToggle() {
       $('syncToggle').classList.toggle('active', settings.workdaySync);
