@@ -16,10 +16,11 @@ app.get('/api/settings', (req, res) => {
   const main = parseCookie(req.cookies.wspomo_main);
   const lang = req.cookies.wspomo_lang;
   const days = parseCookie(req.cookies.wspomo_days);
+  const theme = req.cookies.wspomo_theme;
 
   // Migration: read old pomodoro_settings cookie if new ones don't exist
   let legacy = null;
-  if (!main && !lang && !days) {
+  if (!main && !lang && !days && !theme) {
     legacy = parseCookie(req.cookies.pomodoro_settings);
   }
 
@@ -29,12 +30,13 @@ app.get('/api/settings', (req, res) => {
     ...defaults,
     ...(legacy || main),
     ...(lang || (legacy && legacy.language) ? { language: lang || (legacy && legacy.language) } : {}),
-    ...(days || (legacy && legacy.workDays) ? { workDays: days || (legacy && legacy.workDays) } : {})
+    ...(days || (legacy && legacy.workDays) ? { workDays: days || (legacy && legacy.workDays) } : {}),
+    ...(theme || (legacy && legacy.theme) ? { theme: theme || (legacy && legacy.theme) } : {})
   });
 });
 
 app.post('/api/settings', (req, res) => {
-  const { language, workDays, ...main } = req.body;
+  const { language, workDays, theme, ...main } = req.body;
 
   res.cookie('wspomo_main', JSON.stringify(main), COOKIE_OPTS);
 
@@ -44,6 +46,10 @@ app.post('/api/settings', (req, res) => {
 
   if (Array.isArray(workDays)) {
     res.cookie('wspomo_days', JSON.stringify(workDays), COOKIE_OPTS);
+  }
+
+  if (theme) {
+    res.cookie('wspomo_theme', theme, COOKIE_OPTS);
   }
 
   res.json({ ok: true });
@@ -68,7 +74,8 @@ function getDefaultSettings() {
     workDays: [1, 2, 3, 4, 5],
     soundEnabled: true,
     browserNotification: true,
-    language: null
+    language: null,
+    theme: 'mocha'
   };
 }
 
