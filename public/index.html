@@ -40,6 +40,7 @@
       display: flex;
       flex-direction: column;
       align-items: center;
+      padding-top: 4rem;
     }
 
     .main-wrapper {
@@ -225,6 +226,32 @@
 
     .settings-toggle:hover { background: var(--ctp-surface1); }
 
+    .sync-toggle {
+      position: fixed;
+      top: 1rem;
+      right: 4rem;
+      background: var(--ctp-surface0);
+      border: none;
+      color: var(--ctp-text);
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.2s;
+    }
+
+    .sync-toggle:hover { background: var(--ctp-surface1); }
+
+    .sync-toggle.active {
+      background: var(--ctp-peach);
+      color: var(--ctp-crust);
+    }
+
     .settings-panel {
       position: fixed;
       top: 0;
@@ -319,16 +346,18 @@
       border-color: var(--ctp-blue);
     }
 
-    .setting-row input[type="time"] {
+    input[type="time"] {
+      min-width: 70px;
       padding: 0.5rem;
       background: var(--ctp-surface0);
       border: 1px solid var(--ctp-surface1);
       border-radius: 8px;
       color: var(--ctp-text);
       font-size: 0.9375rem;
+      text-align: center;
     }
 
-    .setting-row input[type="time"]:focus {
+    input[type="time"]:focus {
       outline: none;
       border-color: var(--ctp-blue);
     }
@@ -375,13 +404,60 @@
     }
 
     .workday-settings {
-      max-height: 0;
-      overflow: hidden;
-      transition: max-height 0.3s ease;
+      margin-top: 0.5rem;
     }
 
-    .workday-settings.visible {
-      max-height: 300px;
+    .workday-days {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: nowrap;
+      justify-content: center;
+    }
+
+    .workday-day {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .workday-day input[type="checkbox"] {
+      appearance: none;
+      width: 24px;
+      height: 24px;
+      border-radius: 5px;
+      background: var(--ctp-surface1);
+      border: 1px solid var(--ctp-surface2);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+      color: var(--ctp-text);
+      font-size: 0.625rem;
+      font-weight: 600;
+      margin: 0;
+    }
+
+    .workday-day input[type="checkbox"]:checked {
+      background: var(--ctp-blue);
+      border-color: var(--ctp-blue);
+      color: var(--ctp-crust);
+    }
+
+    .workday-day input[type="checkbox"]:hover {
+      background: var(--ctp-surface2);
+    }
+
+    .workday-day input[type="checkbox"]:checked:hover {
+      filter: brightness(1.1);
+    }
+
+    .workday-day span {
+      font-size: 0.6875rem;
+      color: var(--ctp-subtext0);
+      line-height: 1;
     }
 
     .workday-row {
@@ -533,6 +609,7 @@
   </style>
 </head>
 <body>
+  <button class="sync-toggle" id="syncToggle" title="Синхронизация с рабочим днём">W</button>
   <button class="settings-toggle" id="settingsToggle" aria-label="Настройки">&#9881;</button>
 
   <div class="settings-overlay" id="settingsOverlay"></div>
@@ -573,14 +650,6 @@
 
     <div class="settings-section">
       <h3 id="syncSectionTitle">Синхронизация</h3>
-      <div class="setting-row">
-        <label data-i18n="workdaySync">Синхрон с рабочим днём</label>
-        <label class="toggle-switch">
-          <input type="checkbox" id="workdaySync">
-          <span class="toggle-slider"></span>
-        </label>
-      </div>
-
       <div class="workday-settings" id="workdaySettings">
         <div class="workday-row">
           <label data-i18n="workdayStart">Начало рабочего дня</label>
@@ -597,6 +666,15 @@
         <div class="workday-row">
           <label data-i18n="workdayEnd">Конец рабочего дня</label>
           <input type="time" id="workdayEnd" value="18:00">
+        </div>
+        <div class="workday-days" id="workdayDays">
+          <label class="workday-day"><input type="checkbox" data-day="1" value="1"><span>Пн</span></label>
+          <label class="workday-day"><input type="checkbox" data-day="2" value="2"><span>Вт</span></label>
+          <label class="workday-day"><input type="checkbox" data-day="3" value="3"><span>Ср</span></label>
+          <label class="workday-day"><input type="checkbox" data-day="4" value="4"><span>Чт</span></label>
+          <label class="workday-day"><input type="checkbox" data-day="5" value="5"><span>Пт</span></label>
+          <label class="workday-day"><input type="checkbox" data-day="6" value="6"><span>Сб</span></label>
+          <label class="workday-day"><input type="checkbox" data-day="0" value="0"><span>Вс</span></label>
         </div>
         <div class="sync-info">
           <strong data-i18n="howItWorksTitle">Как работает:</strong> <span data-i18n="howItWorksText">Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.</span>
@@ -709,7 +787,10 @@
         breakTime: 'Время перерыва!',
         workTime: 'Время работать!',
         pageTitle: ' - Помодоро',
-        starOnGithub: 'Star on GitHub'
+        starOnGithub: 'Star on GitHub',
+        lunch: 'Обед',
+        beforeWork: 'До начала рабочего дня',
+        afterWork: 'Рабочий день окончен'
       },
       en: {
         settings: 'Settings',
@@ -743,7 +824,10 @@
         breakTime: 'Time for a break!',
         workTime: 'Time to work!',
         pageTitle: ' - Pomodoro',
-        starOnGithub: 'Star on GitHub'
+        starOnGithub: 'Star on GitHub',
+        lunch: 'Lunch',
+        beforeWork: 'Before workday',
+        afterWork: 'Workday ended'
       }
     };
 
@@ -762,6 +846,7 @@
       lunchStart: '13:00',
       lunchEnd: '14:00',
       workdayEnd: '18:00',
+      workDays: [1, 2, 3, 4, 5],
       soundEnabled: true,
       browserNotification: true,
       language: detectBrowserLanguage()
@@ -797,6 +882,14 @@
       $('syncSectionTitle').textContent = t.sync;
       $('notifSectionTitle').textContent = t.notifications;
 
+      const dayLabels = settings.language === 'en'
+        ? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+        : ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
+      document.querySelectorAll('#workdayDays input[type="checkbox"]').forEach(cb => {
+        const span = cb.parentElement.querySelector('span');
+        if (span) span.textContent = dayLabels[parseInt(cb.value)];
+      });
+
       document.querySelectorAll('.lang-btn').forEach(btn => {
         btn.classList.toggle('active', btn.dataset.lang === settings.language);
       });
@@ -823,6 +916,24 @@
       $('progressCircle').style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
       const t = translations[settings.language] || translations.ru;
       document.title = `${formatTime(state.timeLeft)}${t.pageTitle}`;
+
+      if (settings.workdaySync) {
+        const synced = calculateSyncedTime();
+        if (synced) {
+          if (synced.type === 'lunch') {
+            $('timerLabel').textContent = t.lunch;
+            return;
+          }
+          if (synced.type === 'before-work') {
+            $('timerLabel').textContent = t.beforeWork;
+            return;
+          }
+          if (synced.type === 'after-work') {
+            $('timerLabel').textContent = t.afterWork;
+            return;
+          }
+        }
+      }
     }
 
     function updateModeTabs() {
@@ -960,6 +1071,34 @@
         clearInterval(state.intervalId);
         triggerNotification(state.mode === 'work');
 
+        if (settings.workdaySync) {
+          const synced = calculateSyncedTime();
+          if (synced && (synced.type === 'work' || synced.type === 'break')) {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.totalTime;
+            state.mode = synced.mode;
+            state.currentSession = synced.session || state.currentSession;
+            updateModeTabs();
+            updateDisplay();
+            updateSessionDots();
+            state.running = true;
+            updateStartButton();
+            state.intervalId = setInterval(tick, 1000);
+            return;
+          }
+          if (synced && synced.type === 'lunch') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.timeLeft;
+            state.mode = 'work';
+            updateModeTabs();
+            updateDisplay();
+            state.running = true;
+            updateStartButton();
+            state.intervalId = setInterval(tick, 1000);
+            return;
+          }
+        }
+
         const nextMode = getNextMode();
         switchMode(nextMode);
         updateStartButton();
@@ -971,15 +1110,23 @@
         return;
       }
 
-      if (settings.workdaySync && state.mode === 'work') {
+      if (settings.workdaySync) {
         const synced = calculateSyncedTime();
-        if (synced !== null) {
+        if (synced && (synced.type === 'work' || synced.type === 'break')) {
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           if (synced.mode !== state.mode) {
             state.mode = synced.mode;
+            state.currentSession = synced.session || state.currentSession;
             updateModeTabs();
+            updateSessionDots();
           }
+          updateDisplay();
+          return;
+        }
+        if (synced && synced.type === 'lunch') {
+          state.timeLeft = synced.timeLeft;
+          state.totalTime = synced.timeLeft;
           updateDisplay();
           return;
         }
@@ -991,31 +1138,38 @@
 
     function calculateSyncedTime() {
       const now = new Date();
+      const workDays = settings.workDays || [1, 2, 3, 4, 5];
+      if (!workDays.includes(now.getDay())) {
+        return null;
+      }
+
       const [startH, startM] = settings.workdayStart.split(':').map(Number);
       const [endH, endM] = settings.workdayEnd.split(':').map(Number);
       const [lunchSH, lunchSM] = settings.lunchStart.split(':').map(Number);
       const [lunchEH, lunchEM] = settings.lunchEnd.split(':').map(Number);
 
-      const workdayStartMin = startH * 60 + startM;
-      const workdayEndMin = endH * 60 + endM;
-      const lunchStartMin = lunchSH * 60 + lunchSM;
-      const lunchEndMin = lunchEH * 60 + lunchEM;
+      const workdayStartSec = (startH * 60 + startM) * 60;
+      const workdayEndSec = (endH * 60 + endM) * 60;
+      const lunchStartSec = (lunchSH * 60 + lunchSM) * 60;
+      const lunchEndSec = (lunchEH * 60 + lunchEM) * 60;
 
-      const currentMin = now.getHours() * 60 + now.getMinutes();
-      const currentSec = now.getSeconds();
-      const currentTotalSec = currentMin * 60 + currentSec;
+      const currentSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
 
-      if (currentTotalSec < workdayStartMin * 60 || currentTotalSec >= workdayEndMin * 60) {
-        return null;
+      if (currentSec < workdayStartSec) {
+        return { type: 'before-work', timeLeft: Math.ceil((workdayStartSec - currentSec)) };
       }
 
-      if (currentTotalSec >= lunchStartMin * 60 && currentTotalSec < lunchEndMin * 60) {
-        return null;
+      if (currentSec >= workdayEndSec) {
+        return { type: 'after-work' };
       }
 
-      let elapsed = currentTotalSec - workdayStartMin * 60;
-      if (currentTotalSec >= lunchEndMin * 60) {
-        elapsed -= (lunchEndMin - lunchStartMin) * 60;
+      if (currentSec >= lunchStartSec && currentSec < lunchEndSec) {
+        return { type: 'lunch', timeLeft: Math.ceil((lunchEndSec - currentSec)) };
+      }
+
+      let elapsed = currentSec - workdayStartSec;
+      if (currentSec >= lunchEndSec) {
+        elapsed -= (lunchEndSec - lunchStartSec);
       }
 
       const workSec = settings.workDuration * 60;
@@ -1028,11 +1182,12 @@
       while (true) {
         const workEnd = accumulated + workSec;
         if (elapsed < workEnd) {
-          const timeLeft = workEnd - elapsed;
           return {
-            timeLeft,
+            type: 'work',
+            timeLeft: Math.ceil(workEnd - elapsed),
             totalTime: workSec,
-            mode: 'work'
+            mode: 'work',
+            session
           };
         }
         accumulated = workEnd;
@@ -1042,11 +1197,12 @@
         const breakEnd = accumulated + breakSec;
 
         if (elapsed < breakEnd) {
-          const timeLeft = breakEnd - elapsed;
           return {
-            timeLeft,
+            type: 'break',
+            timeLeft: Math.ceil(breakEnd - elapsed),
             totalTime: breakSec,
-            mode: isLongBreak ? 'longBreak' : 'shortBreak'
+            mode: isLongBreak ? 'longBreak' : 'shortBreak',
+            session
           };
         }
         accumulated = breakEnd;
@@ -1065,14 +1221,43 @@
         return;
       }
 
-      if (settings.workdaySync && state.mode === 'work') {
+      if (settings.workdaySync) {
         const synced = calculateSyncedTime();
         if (synced) {
-          state.timeLeft = synced.timeLeft;
-          state.totalTime = synced.totalTime;
-          state.mode = synced.mode;
-          updateModeTabs();
-          updateDisplay();
+          if (synced.type === 'before-work') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.timeLeft;
+            state.mode = 'work';
+            updateModeTabs();
+            updateDisplay();
+            state.running = true;
+            updateStartButton();
+            state.intervalId = setInterval(tick, 1000);
+            return;
+          }
+          if (synced.type === 'after-work') {
+            return;
+          }
+          if (synced.type === 'lunch') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.timeLeft;
+            state.mode = 'work';
+            updateModeTabs();
+            updateDisplay();
+            state.running = true;
+            updateStartButton();
+            state.intervalId = setInterval(tick, 1000);
+            return;
+          }
+          if (synced.type === 'work' || synced.type === 'break') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.totalTime;
+            state.mode = synced.mode;
+            state.currentSession = synced.session || state.currentSession;
+            updateModeTabs();
+            updateDisplay();
+            updateSessionDots();
+          }
         }
       }
 
@@ -1122,7 +1307,6 @@
       $('shortBreakDuration').value = settings.shortBreakDuration;
       $('longBreakDuration').value = settings.longBreakDuration;
       $('sessionsBeforeLongBreak').value = settings.sessionsBeforeLongBreak;
-      $('workdaySync').checked = settings.workdaySync;
       $('workdayStart').value = settings.workdayStart;
       $('lunchStart').value = settings.lunchStart;
       $('lunchEnd').value = settings.lunchEnd;
@@ -1130,7 +1314,12 @@
       $('soundEnabled').checked = settings.soundEnabled;
       $('browserNotification').checked = settings.browserNotification;
 
-      toggleWorkdaySettings();
+      const workDays = (settings.workDays || [1, 2, 3, 4, 5]).map(Number);
+      document.querySelectorAll('#workdayDays input[type="checkbox"]').forEach(cb => {
+        cb.checked = workDays.includes(parseInt(cb.value));
+      });
+
+      updateSyncToggle();
       applyLanguage();
 
       if (!state.running) {
@@ -1138,21 +1327,23 @@
       }
     }
 
-    function toggleWorkdaySettings() {
-      $('workdaySettings').classList.toggle('visible', $('workdaySync').checked);
-    }
-
     async function saveSettings() {
+      const workDays = [];
+      document.querySelectorAll('#workdayDays input[type="checkbox"]').forEach(cb => {
+        if (cb.checked) workDays.push(parseInt(cb.value));
+      });
+
       const newSettings = {
         workDuration: parseInt($('workDuration').value) || 25,
         shortBreakDuration: parseInt($('shortBreakDuration').value) || 5,
         longBreakDuration: parseInt($('longBreakDuration').value) || 15,
         sessionsBeforeLongBreak: parseInt($('sessionsBeforeLongBreak').value) || 4,
-        workdaySync: $('workdaySync').checked,
+        workdaySync: settings.workdaySync,
         workdayStart: $('workdayStart').value || '09:00',
         lunchStart: $('lunchStart').value || '13:00',
         lunchEnd: $('lunchEnd').value || '14:00',
         workdayEnd: $('workdayEnd').value || '18:00',
+        workDays,
         soundEnabled: $('soundEnabled').checked,
         browserNotification: $('browserNotification').checked,
         language: settings.language
@@ -1204,8 +1395,23 @@
     $('settingsClose').addEventListener('click', closeSettings);
     $('settingsOverlay').addEventListener('click', closeSettings);
     $('saveSettings').addEventListener('click', saveSettings);
-    $('workdaySync').addEventListener('change', toggleWorkdaySettings);
     $('testSoundBtn').addEventListener('click', playTestSound);
+
+    function updateSyncToggle() {
+      $('syncToggle').classList.toggle('active', settings.workdaySync);
+    }
+
+    function toggleSync() {
+      settings.workdaySync = !settings.workdaySync;
+      updateSyncToggle();
+      fetch('/api/settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(settings)
+      }).catch(() => {});
+    }
+
+    $('syncToggle').addEventListener('click', toggleSync);
     $('browserNotification').addEventListener('change', (e) => {
       if (e.target.checked && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
