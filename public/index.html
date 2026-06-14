@@ -646,20 +646,52 @@
       const lsMin = lsH * 60 + lsM;
       const leMin = leH * 60 + leM;
 
-      if (lsMin <= wsMin) {
-        return { valid: false, reason: 'Обед начинается до или в момент начала рабочего дня' };
-      }
-
       if (leMin <= lsMin) {
         return { valid: false, reason: 'Конец обеда должен быть после начала обеда' };
       }
 
-      if (lsMin >= weMin) {
-        return { valid: false, reason: 'Обед начинается после или в момент конца рабочего дня' };
+      if (leMin <= wsMin) {
+        return { valid: false, reason: 'Обед заканчивается до начала рабочего дня' };
       }
 
-      if (leMin >= weMin) {
-        return { valid: false, reason: 'Конец обеда выходит за пределы рабочего дня', adjustedWorkdayEnd: settingsObj.lunchStart };
+      if (lsMin >= weMin) {
+        return { valid: false, reason: 'Обед начинается после конца рабочего дня' };
+      }
+
+      if (lsMin <= wsMin && leMin >= weMin) {
+        return { valid: false, reason: 'Обед полностью покрывает рабочий день' };
+      }
+
+      if (lsMin < wsMin && leMin > wsMin && leMin < weMin) {
+        return { 
+          valid: false, 
+          reason: 'Обед пересекает начало рабочего дня',
+          adjustedWorkdayStart: settingsObj.lunchEnd
+        };
+      }
+
+      if (lsMin >= wsMin && lsMin < weMin && leMin > weMin) {
+        return { 
+          valid: false, 
+          reason: 'Обед пересекает конец рабочего дня',
+          adjustedWorkdayEnd: settingsObj.lunchStart
+        };
+      }
+
+      if (lsMin == wsMin && leMin < weMin) {
+        return { 
+          valid: false, 
+          reason: 'Обед начинается в момент начала рабочего дня',
+          adjustedWorkdayStart: settingsObj.lunchEnd
+        };
+      }
+
+      if (leMin == weMin && lsMin > wsMin) {
+        return { 
+          valid: false, 
+          reason: 'Обед заканчивается в момент конца рабочего дня',
+          adjustedWorkdayEnd: settingsObj.lunchStart
+        };
       }
 
       return { valid: true };
@@ -828,15 +860,25 @@
       if (newSettings.lunchEnabled) {
         const validation = validateLunchTimes(newSettings);
         if (!validation.valid) {
-          if (validation.adjustedWorkdayEnd) {
-            alert(`${validation.reason}. Рабочий день скорректирован до ${validation.adjustedWorkdayEnd}. Обед будет отключен.`);
-            newSettings.workdayEnd = validation.adjustedWorkdayEnd;
-          } else {
-            alert(`${validation.reason}. Обед будет отключен.`);
+          let message = validation.reason;
+          
+          if (validation.adjustedWorkdayStart) {
+            message += `. Начало рабочего дня скорректировано до ${validation.adjustedWorkdayStart}`;
+            newSettings.workdayStart = validation.adjustedWorkdayStart;
+            $('workdayStart').value = newSettings.workdayStart;
           }
+          
+          if (validation.adjustedWorkdayEnd) {
+            message += `. Конец рабочего дня скорректирован до ${validation.adjustedWorkdayEnd}`;
+            newSettings.workdayEnd = validation.adjustedWorkdayEnd;
+            $('workdayEnd').value = newSettings.workdayEnd;
+          }
+          
+          message += '. Обед будет отключен.';
+          alert(message);
+          
           newSettings.lunchEnabled = false;
           $('lunchEnabled').checked = false;
-          $('workdayEnd').value = newSettings.workdayEnd;
           toggleLunchFields();
         }
       }
