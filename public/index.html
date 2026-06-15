@@ -529,6 +529,7 @@
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           if (synced.mode !== state.mode) {
+            triggerNotification(state.mode === 'work');
             state.mode = synced.mode;
             state.currentSession = synced.session || state.currentSession;
             updateModeTabs();
@@ -538,6 +539,9 @@
           return;
         }
         if (synced && synced.type === 'lunch') {
+          if (state.mode === 'work' && state.timeLeft !== synced.timeLeft) {
+            triggerNotification(true);
+          }
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.timeLeft;
           updateDisplay();
