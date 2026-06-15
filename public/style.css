@@ -371,7 +371,7 @@ body {
 }
 
 .time-text-input {
-  min-width: 100px;
+  width: 100px;
   padding: 0.5rem;
   background: var(--ctp-surface0);
   border: 1px solid var(--ctp-surface1);
@@ -380,6 +380,7 @@ body {
   font-size: 0.9375rem;
   text-align: center;
   font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
 }
 
 .time-text-input:focus {
@@ -503,6 +504,10 @@ body {
 
 .workday-row.disabled input {
   cursor: not-allowed;
+}
+
+.workday-row.lunch-row {
+  padding-left: 1.25rem;
 }
 
 .workday-row label {
