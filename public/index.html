@@ -361,7 +361,7 @@
       if (state.mode === 'longBreak') circle.classList.add('long-break');
 
       const t = translations[settings.language] || translations.ru;
-      const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel };
+      const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch };
       $('timerLabel').textContent = labels[state.mode];
     }
 
@@ -502,7 +502,7 @@
           if (synced && synced.type === 'lunch') {
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.timeLeft;
-            state.mode = 'work';
+            state.mode = 'lunch';
             updateModeTabs();
             updateDisplay();
             state.running = true;
@@ -539,8 +539,10 @@
           return;
         }
         if (synced && synced.type === 'lunch') {
-          if (state.mode === 'work' && state.timeLeft !== synced.timeLeft) {
+          if (state.mode !== 'lunch') {
             triggerNotification(true);
+            state.mode = 'lunch';
+            updateModeTabs();
           }
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.timeLeft;
@@ -748,7 +750,7 @@
           if (synced.type === 'lunch') {
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.timeLeft;
-            state.mode = 'work';
+            state.mode = 'lunch';
             updateModeTabs();
             updateDisplay();
             state.running = true;
