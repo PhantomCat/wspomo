@@ -55,7 +55,7 @@
       <div class="workday-settings" id="workdaySettings">
         <div class="workday-row">
           <label data-i18n="workdayStart">Начало рабочего дня</label>
-          <input type="time" id="workdayStart" value="09:00">
+          <input type="text" class="time-text-input" id="workdayStart" value="09:00" placeholder="HH:MM" maxlength="5" inputmode="numeric">
         </div>
         <div class="workday-row">
           <label data-i18n="lunchEnabled">Обед</label>
@@ -66,15 +66,15 @@
         </div>
         <div class="workday-row" id="lunchStartRow">
           <label data-i18n="lunchStart">Начало обеда</label>
-          <input type="time" id="lunchStart" value="13:00">
+          <input type="text" class="time-text-input" id="lunchStart" value="13:00" placeholder="HH:MM" maxlength="5" inputmode="numeric">
         </div>
         <div class="workday-row" id="lunchEndRow">
           <label data-i18n="lunchEnd">Конец обеда</label>
-          <input type="time" id="lunchEnd" value="14:00">
+          <input type="text" class="time-text-input" id="lunchEnd" value="14:00" placeholder="HH:MM" maxlength="5" inputmode="numeric">
         </div>
         <div class="workday-row">
           <label data-i18n="workdayEnd">Конец рабочего дня</label>
-          <input type="time" id="workdayEnd" value="18:00">
+          <input type="text" class="time-text-input" id="workdayEnd" value="18:00" placeholder="HH:MM" maxlength="5" inputmode="numeric">
         </div>
         <div class="workday-days" id="workdayDays">
           <label class="workday-day"><input type="checkbox" data-day="1" value="1"><span>Пн</span></label>
@@ -200,7 +200,8 @@
         starOnGithub: 'Star on GitHub',
         lunch: 'Обед',
         beforeWork: 'До начала рабочего дня',
-        afterWork: 'Рабочий день окончен'
+        afterWork: 'Рабочий день окончен',
+        invalidTime: 'Неверный формат времени'
       },
       en: {
         settings: 'Settings',
@@ -238,7 +239,8 @@
         starOnGithub: 'Star on GitHub',
         lunch: 'Lunch',
         beforeWork: 'Before workday',
-        afterWork: 'Workday ended'
+        afterWork: 'Workday ended',
+        invalidTime: 'Invalid time format'
       }
     };
 
@@ -721,6 +723,83 @@
       }
     }
 
+    function applyTimeMask(input) {
+      const pos = input.selectionStart;
+      const beforeLen = input.value.length;
+      let raw = input.value.replace(/[^\d]/g, '');
+      if (raw.length > 4) raw = raw.slice(0, 4);
+      let formatted;
+      if (raw.length <= 2) {
+        formatted = raw;
+      } else {
+        formatted = raw.slice(0, 2) + ':' + raw.slice(2);
+      }
+      input.value = formatted;
+      const diff = formatted.length - beforeLen;
+      if (diff === 1 && formatted[pos - 1] === ':') {
+        input.setSelectionRange(pos + 1, pos + 1);
+      }
+    }
+
+    function validateTimeInput(input) {
+      const val = input.value;
+      const match = val.match(/^(\d{1,2}):(\d{2})$/);
+      if (!match) {
+        input.classList.add('invalid');
+        return null;
+      }
+      const h = parseInt(match[1], 10);
+      const m = parseInt(match[2], 10);
+      if (h > 23 || m > 59) {
+        input.classList.add('invalid');
+        return null;
+      }
+      input.classList.remove('invalid');
+      return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+
+    function normalizeTimeOnBlur(input) {
+      const raw = input.value.replace(/[^\d]/g, '');
+      let h, m;
+      if (raw.length === 1 || raw.length === 2) {
+        h = parseInt(raw, 10);
+        m = 0;
+      } else if (raw.length === 3) {
+        h = parseInt(raw.slice(0, 1), 10);
+        m = parseInt(raw.slice(1, 3), 10);
+      } else if (raw.length === 4) {
+        h = parseInt(raw.slice(0, 2), 10);
+        m = parseInt(raw.slice(2, 4), 10);
+      } else {
+        return validateTimeInput(input);
+      }
+      if (isNaN(h) || isNaN(m) || h > 23 || m > 59) {
+        input.classList.add('invalid');
+        return null;
+      }
+      const result = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+      input.value = result;
+      input.classList.remove('invalid');
+      return result;
+    }
+
+    function initTimeInputs() {
+      document.querySelectorAll('.time-text-input').forEach(input => {
+        input.addEventListener('input', () => applyTimeMask(input));
+        input.addEventListener('blur', () => normalizeTimeOnBlur(input));
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Enter') {
+            e.preventDefault();
+            normalizeTimeOnBlur(input);
+            input.blur();
+          }
+        });
+        input.addEventListener('focus', () => {
+          input.classList.remove('invalid');
+        });
+      });
+    }
+
     function startTimer() {
       if (state.running) {
         clearInterval(state.intervalId);
@@ -845,17 +924,31 @@
         if (cb.checked) workDays.push(parseInt(cb.value));
       });
 
+      const timeFields = ['workdayStart', 'lunchStart', 'lunchEnd', 'workdayEnd'];
+      const timeValues = {};
+      for (const id of timeFields) {
+        const input = $(id);
+        const val = normalizeTimeOnBlur(input);
+        if (!val) {
+          const t = translations[settings.language] || translations.ru;
+          alert(`${t[id] || id}: ${t.invalidTime || 'Invalid time format'}`);
+          input.focus();
+          return;
+        }
+        timeValues[id] = val;
+      }
+
       const newSettings = {
         workDuration: parseInt($('workDuration').value) || 25,
         shortBreakDuration: parseInt($('shortBreakDuration').value) || 5,
         longBreakDuration: parseInt($('longBreakDuration').value) || 15,
         sessionsBeforeLongBreak: parseInt($('sessionsBeforeLongBreak').value) || 4,
         workdaySync: settings.workdaySync,
-        workdayStart: $('workdayStart').value || '09:00',
+        workdayStart: timeValues.workdayStart,
         lunchEnabled: $('lunchEnabled').checked,
-        lunchStart: $('lunchStart').value || '13:00',
-        lunchEnd: $('lunchEnd').value || '14:00',
-        workdayEnd: $('workdayEnd').value || '18:00',
+        lunchStart: timeValues.lunchStart,
+        lunchEnd: timeValues.lunchEnd,
+        workdayEnd: timeValues.workdayEnd,
         workDays,
         soundEnabled: $('soundEnabled').checked,
         browserNotification: $('browserNotification').checked,
@@ -996,6 +1089,7 @@
         Notification.requestPermission();
       }
     });
+    initTimeInputs();
     applyTheme();
     updateDisplay();
     updateSessionDots();
