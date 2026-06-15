@@ -370,8 +370,8 @@ body {
   border-color: var(--ctp-blue);
 }
 
-input[type="time"] {
-  min-width: 70px;
+.time-text-input {
+  width: 100px;
   padding: 0.5rem;
   background: var(--ctp-surface0);
   border: 1px solid var(--ctp-surface1);
@@ -379,11 +379,17 @@ input[type="time"] {
   color: var(--ctp-text);
   font-size: 0.9375rem;
   text-align: center;
+  font-variant-numeric: tabular-nums;
+  box-sizing: border-box;
 }
 
-input[type="time"]:focus {
+.time-text-input:focus {
   outline: none;
   border-color: var(--ctp-blue);
+}
+
+.time-text-input.invalid {
+  border-color: var(--ctp-red);
 }
 
 .toggle-switch {
@@ -498,6 +504,10 @@ input[type="time"]:focus {
 
 .workday-row.disabled input {
   cursor: not-allowed;
+}
+
+.workday-row.lunch-row {
+  padding-left: 1.25rem;
 }
 
 .workday-row label {
