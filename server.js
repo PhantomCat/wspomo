@@ -68,6 +68,7 @@ function getDefaultSettings() {
     sessionsBeforeLongBreak: 4,
     workdaySync: false,
     workdayStart: '09:00',
+    lunchEnabled: true,
     lunchStart: '13:00',
     lunchEnd: '14:00',
     workdayEnd: '18:00',
