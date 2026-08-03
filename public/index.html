@@ -211,8 +211,6 @@
         focus: 'Фокус',
         shortBreakLabel: 'Короткий перерыв',
         longBreakLabel: 'Длинный перерыв',
-        breakTime: 'Время перерыва!',
-        workTime: 'Время работать!',
         min: 'мин',
         starOnGithub: 'Star on GitHub',
         lunch: 'Обед',
@@ -250,8 +248,6 @@
         focus: 'Focus',
         shortBreakLabel: 'Short break',
         longBreakLabel: 'Long break',
-        breakTime: 'Time for a break!',
-        workTime: 'Time to work!',
         min: 'min',
         starOnGithub: 'Star on GitHub',
         lunch: 'Lunch',
@@ -520,26 +516,26 @@
       } catch (e) {}
     }
 
-    function triggerNotification(isWorkEnding) {
+    function triggerNotification(nextMode) {
       if (settings.soundEnabled) {
-        isWorkEnding ? playWorkEndSound() : playBreakEndSound();
+        nextMode === 'work' ? playBreakEndSound() : playWorkEndSound();
       }
 
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'granted') {
         const t = translations[settings.language] || translations.ru;
-        const body = isWorkEnding ? t.breakTime : t.workTime;
-        new Notification('Pomodoro', { body });
+        const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch };
+        new Notification('wspomo', { body: labels[nextMode] || t.focus });
       }
     }
 
     function tick() {
       if (state.timeLeft <= 0) {
         clearInterval(state.intervalId);
-        triggerNotification(state.mode === 'work');
 
         if (settings.workdaySync) {
           const synced = calculateSyncedTime();
           if (synced && (synced.type === 'work' || synced.type === 'break')) {
+            triggerNotification(synced.mode);
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.totalTime;
             state.mode = synced.mode;
@@ -553,6 +549,7 @@
             return;
           }
           if (synced && synced.type === 'lunch') {
+            triggerNotification('lunch');
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.timeLeft;
             state.mode = 'lunch';
@@ -566,6 +563,7 @@
         }
 
         const nextMode = getNextMode();
+        triggerNotification(nextMode);
         switchMode(nextMode);
         updateStartButton();
         $('startBtn').classList.remove('paused');
@@ -582,7 +580,7 @@
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           if (synced.mode !== state.mode) {
-            triggerNotification(state.mode === 'work');
+            triggerNotification(synced.mode);
             state.mode = synced.mode;
             state.currentSession = synced.session || state.currentSession;
             updateModeTabs();
@@ -593,7 +591,7 @@
         }
         if (synced && synced.type === 'lunch') {
           if (state.mode !== 'lunch') {
-            triggerNotification(true);
+            triggerNotification('lunch');
             state.mode = 'lunch';
             updateModeTabs();
           }
