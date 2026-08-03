@@ -360,8 +360,16 @@
 
     function updateTitle() {
       const t = translations[settings.language] || translations.ru;
-      const mins = Math.ceil(state.timeLeft / 60);
-      const title = `${getModeLabel()} ${mins} ${t.min} - wspomo`;
+      const mins = Math.floor(state.timeLeft / 60);
+      const minsLabel = mins < 1 ? '<1' : mins;
+      let title;
+      if (!state.running) {
+        title = state.timeLeft >= state.totalTime
+          ? 'wspomo'
+          : `${t.pause} ${minsLabel} ${t.min} - wspomo`;
+      } else {
+        title = `${getModeLabel()} ${minsLabel} ${t.min} - wspomo`;
+      }
       if (title !== lastTitle) {
         document.title = title;
         lastTitle = title;
@@ -848,6 +856,7 @@
         clearInterval(state.intervalId);
         state.running = false;
         updateStartButton();
+        updateTitle();
         $('startBtn').classList.add('paused');
         return;
       }
