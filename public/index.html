@@ -213,7 +213,7 @@
         longBreakLabel: 'Длинный перерыв',
         breakTime: 'Время перерыва!',
         workTime: 'Время работать!',
-        pageTitle: ' - Помодоро',
+        min: 'мин',
         starOnGithub: 'Star on GitHub',
         lunch: 'Обед',
         beforeWork: 'До начала рабочего дня',
@@ -252,7 +252,7 @@
         longBreakLabel: 'Long break',
         breakTime: 'Time for a break!',
         workTime: 'Time to work!',
-        pageTitle: ' - Pomodoro',
+        min: 'min',
         starOnGithub: 'Star on GitHub',
         lunch: 'Lunch',
         beforeWork: 'Before workday',
@@ -328,7 +328,7 @@
 
       updateModeTabs();
       updateStartButton();
-      document.title = `${formatTime(state.timeLeft)}${t.pageTitle}`;
+      updateTitle();
     }
 
     function updateStartButton() {
@@ -342,12 +342,46 @@
       return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
     }
 
+    function getModeLabel() {
+      const t = translations[settings.language] || translations.ru;
+      if (settings.workdaySync) {
+        const synced = calculateSyncedTime();
+        if (synced) {
+          if (synced.type === 'lunch') return t.lunch;
+          if (synced.type === 'before-work') return t.beforeWork;
+          if (synced.type === 'after-work') return t.afterWork;
+        }
+      }
+      const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch };
+      return labels[state.mode] || t.focus;
+    }
+
+    let lastTitle = '';
+
+    function updateTitle() {
+      const t = translations[settings.language] || translations.ru;
+      const mins = Math.floor(state.timeLeft / 60);
+      const minsLabel = mins < 1 ? '<1' : mins;
+      let title;
+      if (!state.running) {
+        title = state.timeLeft >= state.totalTime
+          ? 'wspomo'
+          : `${t.pause} ${minsLabel} ${t.min} - wspomo`;
+      } else {
+        title = `${getModeLabel()} ${minsLabel} ${t.min} - wspomo`;
+      }
+      if (title !== lastTitle) {
+        document.title = title;
+        lastTitle = title;
+      }
+    }
+
     function updateDisplay() {
       $('timerTime').textContent = formatTime(state.timeLeft);
       const progress = 1 - (state.timeLeft / state.totalTime);
       $('progressCircle').style.strokeDashoffset = CIRCUMFERENCE * (1 - progress);
       const t = translations[settings.language] || translations.ru;
-      document.title = `${formatTime(state.timeLeft)}${t.pageTitle}`;
+      updateTitle();
 
       if (settings.workdaySync) {
         const synced = calculateSyncedTime();
@@ -822,6 +856,7 @@
         clearInterval(state.intervalId);
         state.running = false;
         updateStartButton();
+        updateTitle();
         $('startBtn').classList.add('paused');
         return;
       }
