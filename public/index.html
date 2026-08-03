@@ -287,7 +287,8 @@
       running: false,
       currentSession: 1,
       intervalId: null,
-      syncedStartTime: null
+      syncedStartTime: null,
+      lastSyncType: null
     };
 
     const $ = id => document.getElementById(id);
@@ -500,9 +501,38 @@
       try {
         const ctx = getAudioContext();
         const now = ctx.currentTime;
-        playTone(ctx, 783.99, now, 0.2, 'triangle', 0.25);
-        playTone(ctx, 659.25, now + 0.2, 0.2, 'triangle', 0.25);
-        playTone(ctx, 523.25, now + 0.4, 0.4, 'triangle', 0.3);
+        playTone(ctx, 440, now, 0.15, 'sine', 0.2);
+        playTone(ctx, 554.37, now + 0.15, 0.15, 'sine', 0.2);
+        playTone(ctx, 659.25, now + 0.3, 0.25, 'sine', 0.2);
+      } catch (e) {}
+    }
+
+    function playLunchSound() {
+      if (!settings.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        // Стилизация горна «На обед»: бе-ри ло-жку, бе-ри хлеб
+        playTone(ctx, 392.00, now,        0.15, 'square', 0.12);
+        playTone(ctx, 392.00, now + 0.15, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 0.30, 0.30, 'square', 0.12);
+        playTone(ctx, 523.25, now + 0.62, 0.30, 'square', 0.12);
+        playTone(ctx, 659.25, now + 0.97, 0.15, 'square', 0.12);
+        playTone(ctx, 659.25, now + 1.12, 0.15, 'square', 0.12);
+        playTone(ctx, 783.99, now + 1.27, 0.60, 'square', 0.15);
+      } catch (e) {}
+    }
+
+    function playWorkdayEndSound() {
+      if (!settings.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        // Фанфары «та-дааа»
+        playTone(ctx, 523.25, now,        0.12, 'triangle', 0.25);
+        playTone(ctx, 659.25, now + 0.12, 0.12, 'triangle', 0.25);
+        playTone(ctx, 783.99, now + 0.24, 0.12, 'triangle', 0.25);
+        playTone(ctx, 1046.50, now + 0.36, 0.70, 'triangle', 0.30);
       } catch (e) {}
     }
 
@@ -518,12 +548,15 @@
 
     function triggerNotification(nextMode) {
       if (settings.soundEnabled) {
-        nextMode === 'work' ? playBreakEndSound() : playWorkEndSound();
+        if (nextMode === 'work') playBreakEndSound();
+        else if (nextMode === 'lunch') playLunchSound();
+        else if (nextMode === 'afterWork') playWorkdayEndSound();
+        else playWorkEndSound();
       }
 
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'granted') {
         const t = translations[settings.language] || translations.ru;
-        const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch };
+        const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch, afterWork: t.afterWork };
         new Notification('wspomo', { body: labels[nextMode] || t.focus });
       }
     }
@@ -560,6 +593,16 @@
             state.intervalId = setInterval(tick, 1000);
             return;
           }
+          if (synced && synced.type === 'after-work') {
+            if (state.lastSyncType !== 'after-work') {
+              triggerNotification('afterWork');
+              state.lastSyncType = 'after-work';
+            }
+            state.running = false;
+            updateStartButton();
+            updateDisplay();
+            return;
+          }
         }
 
         const nextMode = getNextMode();
@@ -576,6 +619,12 @@
 
       if (settings.workdaySync) {
         const synced = calculateSyncedTime();
+        if (synced) {
+          if (state.lastSyncType && state.lastSyncType !== 'after-work' && synced.type === 'after-work') {
+            triggerNotification('afterWork');
+          }
+          state.lastSyncType = synced.type;
+        }
         if (synced && (synced.type === 'work' || synced.type === 'break')) {
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
