@@ -1,7 +1,9 @@
 services:
-  pomodoro:
+
+  wspomo:
     build: .
-    container_name: pomodoro-timer
+    container_name: wspomo
+    image: wspomo:latest
     ports:
       - "3000:3000"
     restart: unless-stopped

@@ -2,6 +2,7 @@
   "name": "pomodoro-timer",
   "version": "1.0.0",
   "description": "Pomodoro timer with workday sync",
+  "license": "GPL-3.0-or-later",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

@@ -66,6 +66,7 @@ wspomo/
 ├── docker-compose.yml
 ├── .dockerignore
 ├── .gitignore
+├── LICENSE
 ├── package.json
 ├── server.js
 └── public/
@@ -78,3 +79,9 @@ wspomo/
 - **Фронтенд:** Vanilla HTML/CSS/JS, Web Audio API
 - **Тема:** Catppuccin Mocha
 - **Рантайм:** Node.js 20 Alpine
+
+## Лицензия
+
+Copyright (C) 2026 Serge Mymrikov (PhantomCat)
+
+wspomo — свободное ПО под лицензией [GNU GPL v3.0](LICENSE) или (по вашему выбору) любой более поздней версии. Проект можно свободно использовать, изменять и распространять — форки и производные работы обязаны оставаться под GPL-3.0, открывать исходный код и сохранять уведомление об авторских правах. Полный текст — в файле [LICENSE](LICENSE).
