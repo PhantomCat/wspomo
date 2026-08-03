@@ -1,30 +1,63 @@
-# wspomo
+<p align="center">
+  <a href="README.md">English</a> · <b>Русский</b>
+</p>
 
-**W**orkday **S**ynchronized **Pomo**doro Timer
+<h1 align="center">Workday Synced Pomodoro Timer</h1>
 
-Минималистичный помодоро-таймер с синхронизацией рабочего дня, уведомлениями и поддержкой двух языков. Node.js + vanilla frontend.
+<p align="center">
+  <b>aka <a href="https://wspomo.xyz">wspomo</a></b> — минималистичный помодоро-таймер, привязанный к вашему рабочему расписанию.<br>
+  Node.js + vanilla frontend.
+</p>
 
-> **Примечание:** Проект создан с помощью ИИ.
+<p align="center">
+  <a href="https://wspomo.xyz"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/wspomo.xyz-live-a6e3a1?style=flat-square">
+    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/wspomo.xyz-live-40a02b?style=flat-square">
+    <img alt="wspomo.xyz — live" src="https://img.shields.io/badge/wspomo.xyz-live-a6e3a1?style=flat-square">
+  </picture></a>
+  <a href="LICENSE"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/license-GPL--3.0-89b4fa?style=flat-square">
+    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/license-GPL--3.0-1e66f5?style=flat-square">
+    <img alt="Лицензия: GPL-3.0" src="https://img.shields.io/badge/license-GPL--3.0-89b4fa?style=flat-square">
+  </picture></a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/node-20-fab387?style=flat-square">
+    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/node-20-fe640b?style=flat-square">
+    <img alt="Node.js 20" src="https://img.shields.io/badge/node-20-fab387?style=flat-square">
+  </picture>
+  <a href="https://catppuccin.com"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/theme-Catppuccin-cba6f7?style=flat-square">
+    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/theme-Catppuccin-8839ef?style=flat-square">
+    <img alt="Тема: Catppuccin" src="https://img.shields.io/badge/theme-Catppuccin-cba6f7?style=flat-square">
+  </picture></a>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/built_with-AI_assistance-f5c2e7?style=flat-square">
+    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/built_with-AI_assistance-ea76cb?style=flat-square">
+    <img alt="Создано при участии ИИ" src="https://img.shields.io/badge/built_with-AI_assistance-f5c2e7?style=flat-square">
+  </picture>
+</p>
 
 ## Чем отличается
 
-В отличие от большинства помодоро-таймеров, которые просто отсчитывают время с момента нажатия «Старт», **wspomo** привязывает всю цепочку интервалов к вашему рабочему расписанию. При включённой синхронизации таймер рассчитывает, в какой сессии вы *должны* быть прямо сейчас — перерывы и фокус-сессии совпадают с реальным временем, а не с тем, когда вы открыли приложение.
-
-Если вы открыли wspomo в 10:15 при начале рабочего дня в 09:00 — он знает, что вы уже в середине сессии, и покажет оставшееся время. Никаких «уплывающих» перерывов и рассинхрона.
+Большинство помодоро-таймеров просто отсчитывают время с момента нажатия «Старт». wspomo привязывает всю цепочку интервалов к вашему рабочему расписанию: он рассчитывает, в какой сессии вы *должны* быть прямо сейчас, — перерывы и фокус-блоки идут по реальным часам. Открыли в 10:15 при начале рабочего дня в 09:00 — таймер подхватит сессию с середины и покажет оставшееся время. Никаких «уплывающих» перерывов и рассинхрона.
 
 ## Возможности
 
 - **Синхронизация с рабочим днём** — привязка цепочки помодоро к расписанию (начало, обед, конец)
 - **Три режима:** Фокус, короткий перерыв, длинный перерыв
 - **Настраиваемая длительность** каждого режима
-- **Авто-переход:** Интервалы переключаются автоматически (работа → короткий перерыв → работа → … → длинный перерыв)
+- **Авто-переход** — интервалы переключаются автоматически (работа → короткий перерыв → работа → … → длинный перерыв)
 - **Звуковые уведомления** с кнопкой проверки и отключением
 - **Браузерные уведомления** с запросом разрешения
-- **Два языка:** Русский и английский, автоопределение по языку браузера
+- **Два языка** — русский и английский, автоопределение по языку браузера
 - **Сохранение настроек** в cookie браузера
-- **Тема Catppuccin Mocha**
+- **Тёмная тема Catppuccin Mocha**
 
 ## Быстрый старт
+
+**Онлайн:** [wspomo.xyz](https://wspomo.xyz) — установка не нужна.
+
+**Свой сервер с Docker:**
 
 ```bash
 docker compose up -d
@@ -32,7 +65,7 @@ docker compose up -d
 
 Откройте `http://localhost:3000`
 
-## Ручной запуск
+**Ручной запуск:**
 
 ```bash
 npm install
@@ -70,7 +103,8 @@ wspomo/
 ├── package.json
 ├── server.js
 └── public/
-    └── index.html
+    ├── index.html
+    └── style.css
 ```
 
 ## Стек технологий
