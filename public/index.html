@@ -512,14 +512,14 @@
       try {
         const ctx = getAudioContext();
         const now = ctx.currentTime;
-        // Стилизация горна «На обед»: бе-ри ло-жку, бе-ри хлеб
+        // Стилизация горна «На обед»: соль-соль, до-до, соль-соль, дооо
         playTone(ctx, 392.00, now,        0.15, 'square', 0.12);
-        playTone(ctx, 392.00, now + 0.15, 0.15, 'square', 0.12);
-        playTone(ctx, 523.25, now + 0.30, 0.30, 'square', 0.12);
-        playTone(ctx, 523.25, now + 0.62, 0.30, 'square', 0.12);
-        playTone(ctx, 659.25, now + 0.97, 0.15, 'square', 0.12);
-        playTone(ctx, 659.25, now + 1.12, 0.15, 'square', 0.12);
-        playTone(ctx, 783.99, now + 1.27, 0.60, 'square', 0.15);
+        playTone(ctx, 392.00, now + 0.17, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 0.40, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 0.57, 0.15, 'square', 0.12);
+        playTone(ctx, 392.00, now + 0.78, 0.15, 'square', 0.12);
+        playTone(ctx, 392.00, now + 0.95, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 1.16, 0.60, 'square', 0.15);
       } catch (e) {}
     }
 
