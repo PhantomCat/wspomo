@@ -211,8 +211,6 @@
         focus: 'Фокус',
         shortBreakLabel: 'Короткий перерыв',
         longBreakLabel: 'Длинный перерыв',
-        breakTime: 'Время перерыва!',
-        workTime: 'Время работать!',
         min: 'мин',
         starOnGithub: 'Star on GitHub',
         lunch: 'Обед',
@@ -250,8 +248,6 @@
         focus: 'Focus',
         shortBreakLabel: 'Short break',
         longBreakLabel: 'Long break',
-        breakTime: 'Time for a break!',
-        workTime: 'Time to work!',
         min: 'min',
         starOnGithub: 'Star on GitHub',
         lunch: 'Lunch',
@@ -291,7 +287,8 @@
       running: false,
       currentSession: 1,
       intervalId: null,
-      syncedStartTime: null
+      syncedStartTime: null,
+      lastSyncType: null
     };
 
     const $ = id => document.getElementById(id);
@@ -504,9 +501,38 @@
       try {
         const ctx = getAudioContext();
         const now = ctx.currentTime;
-        playTone(ctx, 783.99, now, 0.2, 'triangle', 0.25);
-        playTone(ctx, 659.25, now + 0.2, 0.2, 'triangle', 0.25);
-        playTone(ctx, 523.25, now + 0.4, 0.4, 'triangle', 0.3);
+        playTone(ctx, 440, now, 0.15, 'sine', 0.2);
+        playTone(ctx, 554.37, now + 0.15, 0.15, 'sine', 0.2);
+        playTone(ctx, 659.25, now + 0.3, 0.25, 'sine', 0.2);
+      } catch (e) {}
+    }
+
+    function playLunchSound() {
+      if (!settings.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        // Стилизация горна «На обед»: соль-соль, до-до, соль-соль, дооо
+        playTone(ctx, 392.00, now,        0.15, 'square', 0.12);
+        playTone(ctx, 392.00, now + 0.17, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 0.40, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 0.57, 0.15, 'square', 0.12);
+        playTone(ctx, 392.00, now + 0.78, 0.15, 'square', 0.12);
+        playTone(ctx, 392.00, now + 0.95, 0.15, 'square', 0.12);
+        playTone(ctx, 523.25, now + 1.16, 0.60, 'square', 0.15);
+      } catch (e) {}
+    }
+
+    function playWorkdayEndSound() {
+      if (!settings.soundEnabled) return;
+      try {
+        const ctx = getAudioContext();
+        const now = ctx.currentTime;
+        // Фанфары «та-дааа»
+        playTone(ctx, 523.25, now,        0.12, 'triangle', 0.25);
+        playTone(ctx, 659.25, now + 0.12, 0.12, 'triangle', 0.25);
+        playTone(ctx, 783.99, now + 0.24, 0.12, 'triangle', 0.25);
+        playTone(ctx, 1046.50, now + 0.36, 0.70, 'triangle', 0.30);
       } catch (e) {}
     }
 
@@ -520,26 +546,29 @@
       } catch (e) {}
     }
 
-    function triggerNotification(isWorkEnding) {
+    function triggerNotification(nextMode) {
       if (settings.soundEnabled) {
-        isWorkEnding ? playWorkEndSound() : playBreakEndSound();
+        if (nextMode === 'work') playBreakEndSound();
+        else if (nextMode === 'lunch') playLunchSound();
+        else if (nextMode === 'afterWork') playWorkdayEndSound();
+        else playWorkEndSound();
       }
 
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'granted') {
         const t = translations[settings.language] || translations.ru;
-        const body = isWorkEnding ? t.breakTime : t.workTime;
-        new Notification('Pomodoro', { body });
+        const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch, afterWork: t.afterWork };
+        new Notification('wspomo', { body: labels[nextMode] || t.focus });
       }
     }
 
     function tick() {
       if (state.timeLeft <= 0) {
         clearInterval(state.intervalId);
-        triggerNotification(state.mode === 'work');
 
         if (settings.workdaySync) {
           const synced = calculateSyncedTime();
           if (synced && (synced.type === 'work' || synced.type === 'break')) {
+            triggerNotification(synced.mode);
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.totalTime;
             state.mode = synced.mode;
@@ -553,6 +582,7 @@
             return;
           }
           if (synced && synced.type === 'lunch') {
+            triggerNotification('lunch');
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.timeLeft;
             state.mode = 'lunch';
@@ -563,9 +593,20 @@
             state.intervalId = setInterval(tick, 1000);
             return;
           }
+          if (synced && synced.type === 'after-work') {
+            if (state.lastSyncType !== 'after-work') {
+              triggerNotification('afterWork');
+              state.lastSyncType = 'after-work';
+            }
+            state.running = false;
+            updateStartButton();
+            updateDisplay();
+            return;
+          }
         }
 
         const nextMode = getNextMode();
+        triggerNotification(nextMode);
         switchMode(nextMode);
         updateStartButton();
         $('startBtn').classList.remove('paused');
@@ -578,11 +619,17 @@
 
       if (settings.workdaySync) {
         const synced = calculateSyncedTime();
+        if (synced) {
+          if (state.lastSyncType && state.lastSyncType !== 'after-work' && synced.type === 'after-work') {
+            triggerNotification('afterWork');
+          }
+          state.lastSyncType = synced.type;
+        }
         if (synced && (synced.type === 'work' || synced.type === 'break')) {
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           if (synced.mode !== state.mode) {
-            triggerNotification(state.mode === 'work');
+            triggerNotification(synced.mode);
             state.mode = synced.mode;
             state.currentSession = synced.session || state.currentSession;
             updateModeTabs();
@@ -593,7 +640,7 @@
         }
         if (synced && synced.type === 'lunch') {
           if (state.mode !== 'lunch') {
-            triggerNotification(true);
+            triggerNotification('lunch');
             state.mode = 'lunch';
             updateModeTabs();
           }
