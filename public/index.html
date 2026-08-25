@@ -21,6 +21,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pomodoro Timer</title>
+  <link rel="icon" id="favicon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -413,6 +414,30 @@
       const t = translations[settings.language] || translations.ru;
       const labels = { work: t.focus, shortBreak: t.shortBreakLabel, longBreak: t.longBreakLabel, lunch: t.lunch };
       $('timerLabel').textContent = labels[state.mode];
+      updateFavicon(state.mode);
+    }
+
+    const faviconColors = {
+      work: '#e54545',
+      shortBreak: '#40a02b',
+      longBreak: '#40a02b',
+      lunch: '#1e66f5'
+    };
+    let faviconBaseSvg = null;
+
+    function updateFavicon(mode) {
+      const color = faviconColors[mode] || faviconColors.work;
+      const link = $('favicon');
+      const render = () => {
+        const indicator = `<circle cx="41.57" cy="41.57" r="9.75" fill="${color}" stroke="#1e1e2e" stroke-width="2"/>`;
+        const injected = faviconBaseSvg.replace('</svg>', `  ${indicator}\n</svg>`);
+        link.href = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(injected);
+      };
+      if (faviconBaseSvg) { render(); return; }
+      fetch('/favicon.svg').then(r => r.text()).then(svg => {
+        faviconBaseSvg = svg;
+        render();
+      });
     }
 
     function updateSessionDots() {
