@@ -655,10 +655,22 @@ body {
   transform: scale(1.15);
 }
 
+.catppuccin-icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
 .footer {
   margin-top: auto;
   padding: 1.5rem 0;
-  text-align: center;
+}
+
+.footer-links {
+  display: inline-flex;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+  justify-content: center;
 }
 
 @media (max-width: 480px) {
