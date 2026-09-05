@@ -4,3 +4,5 @@ npm-debug.log*
 *.log
 .DS_Store
 TODO
+logo/
+*.tar.gz

@@ -1,0 +1,3 @@
+wspomo.xyz {
+    reverse_proxy wspomo:3000
+}

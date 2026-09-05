@@ -4,3 +4,6 @@ npm-debug.log
 .gitignore
 *.md
 .env
+caddy/
+logo/
+*.tar.gz

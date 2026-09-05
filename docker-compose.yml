@@ -1,11 +1,25 @@
 services:
 
+  caddy:
+    image: caddy:2
+    container_name: caddy
+    ports:
+      - 80:80
+      - 443:443
+    restart: unless-stopped
+    volumes:
+      - ${PWD}/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ${PWD}/caddy/data:/data
+      - ${PWD}/caddy/config:/config
+      - /etc/localtime:/etc/localtime:ro
+
+
   wspomo:
     build: .
     container_name: wspomo
     image: wspomo:latest
     ports:
-      - "3000:3000"
+      - 3000:3000
     restart: unless-stopped
     environment:
       - NODE_ENV=production
