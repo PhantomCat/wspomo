@@ -245,6 +245,32 @@ body {
 
 .session-dot.completed { background: var(--ctp-red); }
 
+.site-header {
+  position: fixed;
+  top: 1rem;
+  left: 1.25rem;
+  z-index: 50;
+  pointer-events: none;
+  user-select: none;
+  line-height: 1;
+}
+
+.site-name {
+  display: block;
+  font-size: 1.5rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ctp-overlay0);
+}
+
+.site-tagline {
+  display: block;
+  font-size: 0.6875rem;
+  letter-spacing: 0.12em;
+  color: var(--ctp-surface1);
+  opacity: 0.8;
+}
+
 .settings-toggle,
 .sync-toggle,
 .theme-toggle {
@@ -414,6 +440,7 @@ body {
   position: relative;
   width: 48px;
   height: 26px;
+  flex-shrink: 0;
 }
 
 .toggle-switch input {
@@ -449,6 +476,7 @@ body {
 
 .toggle-switch input:checked + .toggle-slider:before {
   transform: translateX(22px);
+  background: var(--ctp-crust);
 }
 
 .workday-settings {
@@ -531,6 +559,10 @@ body {
 .workday-row label {
   font-size: 0.875rem;
   color: var(--ctp-subtext1);
+}
+
+.workday-row > label:not(.toggle-switch) {
+  padding-right: 0.75rem;
 }
 
 .btn-save {

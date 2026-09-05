@@ -90,6 +90,7 @@ function getDefaultSettings() {
     lunchStart: '13:00',
     lunchEnd: '14:00',
     workdayEnd: '18:00',
+    continueAfterWorkday: false,
     workDays: [1, 2, 3, 4, 5],
     soundEnabled: true,
     browserNotification: true,

@@ -25,6 +25,10 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
+  <header class="site-header">
+    <span class="site-tagline">workday synced pomodoro timer</span>
+    <span class="site-name">:wspomo</span>
+  </header>
   <button class="sync-toggle" id="syncToggle" title="Синхронизация с рабочим днём">W</button>
   <button class="theme-toggle" id="themeToggle" title="Тема">
     <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
@@ -93,6 +97,13 @@
         <div class="workday-row">
           <label data-i18n="workdayEnd">Конец рабочего дня</label>
           <input type="text" class="time-text-input" id="workdayEnd" value="18:00" placeholder="HH:MM" maxlength="5" inputmode="numeric">
+        </div>
+        <div class="workday-row">
+          <label data-i18n="continueAfterWorkday">Продолжать отсчёт после окончания рабочего дня</label>
+          <label class="toggle-switch">
+            <input type="checkbox" id="continueAfterWorkday">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
         <div class="workday-days" id="workdayDays">
           <label class="workday-day"><input type="checkbox" data-day="1" value="1"><span>Пн</span></label>
@@ -204,6 +215,7 @@
         lunchStart: 'Начало обеда',
         lunchEnd: 'Конец обеда',
         workdayEnd: 'Конец рабочего дня',
+        continueAfterWorkday: 'Продолжать отсчёт после окончания рабочего дня',
         howItWorksTitle: 'Как работает:',
         howItWorksText: 'Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.',
         sound: 'Звук',
@@ -242,6 +254,7 @@
         lunchStart: 'Lunch start',
         lunchEnd: 'Lunch end',
         workdayEnd: 'Workday end',
+        continueAfterWorkday: 'Keep counting after the workday ends',
         howItWorksTitle: 'How it works:',
         howItWorksText: 'Timer is anchored to the hour start. If enabled at 09:15 — the chain starts from 09:00, and the timer shows remaining time of the current session. Lunch is skipped in calculations.',
         sound: 'Sound',
@@ -282,6 +295,7 @@
       lunchStart: '13:00',
       lunchEnd: '14:00',
       workdayEnd: '18:00',
+      continueAfterWorkday: false,
       workDays: [1, 2, 3, 4, 5],
       soundEnabled: true,
       browserNotification: true,
@@ -503,16 +517,22 @@
       return audioCtx;
     }
 
-    function playTone(ctx, freq, startTime, duration, type = 'sine', volume = 0.3) {
+    function playTone(ctx, freq, startTime, duration, type = 'sine', volume = 0.3, sustain = false) {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       osc.connect(gain);
       gain.connect(ctx.destination);
       osc.frequency.value = freq;
       osc.type = type;
+      const release = 0.05;
       gain.gain.setValueAtTime(0, startTime);
       gain.gain.linearRampToValueAtTime(volume, startTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      if (sustain) {
+        gain.gain.setValueAtTime(volume, startTime + duration - release);
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      } else {
+        gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      }
       osc.start(startTime);
       osc.stop(startTime + duration);
     }
@@ -545,14 +565,14 @@
       try {
         const ctx = getAudioContext();
         const now = ctx.currentTime;
-        // Стилизация горна «На обед»: соль-соль, до-до, соль-соль, дооо
-        playTone(ctx, 392.00, now,        0.15, 'square', 0.12);
-        playTone(ctx, 392.00, now + 0.17, 0.15, 'square', 0.12);
-        playTone(ctx, 523.25, now + 0.40, 0.15, 'square', 0.12);
-        playTone(ctx, 523.25, now + 0.57, 0.15, 'square', 0.12);
-        playTone(ctx, 392.00, now + 0.78, 0.15, 'square', 0.12);
-        playTone(ctx, 392.00, now + 0.95, 0.15, 'square', 0.12);
-        playTone(ctx, 523.25, now + 1.16, 0.60, 'square', 0.15);
+        // Горн «На обед» легато: соль-соль, до-до, соль-соль, дооо
+        playTone(ctx, 392.00, now,        0.17, 'sine', 0.30, true);
+        playTone(ctx, 392.00, now + 0.17, 0.17, 'sine', 0.30, true);
+        playTone(ctx, 523.25, now + 0.40, 0.17, 'sine', 0.30, true);
+        playTone(ctx, 523.25, now + 0.57, 0.17, 'sine', 0.30, true);
+        playTone(ctx, 392.00, now + 0.78, 0.17, 'sine', 0.30, true);
+        playTone(ctx, 392.00, now + 0.95, 0.17, 'sine', 0.30, true);
+        playTone(ctx, 523.25, now + 1.16, 0.60, 'sine', 0.30, true);
       } catch (e) {}
     }
 
@@ -708,7 +728,7 @@
       }
 
       if (currentSec >= workdayEndSec) {
-        return { type: 'after-work' };
+        return settings.continueAfterWorkday ? null : { type: 'after-work' };
       }
 
       let elapsed;
@@ -1032,6 +1052,7 @@
       $('lunchStart').value = settings.lunchStart;
       $('lunchEnd').value = settings.lunchEnd;
       $('workdayEnd').value = settings.workdayEnd;
+      $('continueAfterWorkday').checked = !!settings.continueAfterWorkday;
       $('soundEnabled').checked = settings.soundEnabled;
       $('browserNotification').checked = settings.browserNotification;
 
@@ -1081,6 +1102,7 @@
         lunchStart: timeValues.lunchStart,
         lunchEnd: timeValues.lunchEnd,
         workdayEnd: timeValues.workdayEnd,
+        continueAfterWorkday: $('continueAfterWorkday').checked,
         workDays,
         soundEnabled: $('soundEnabled').checked,
         browserNotification: $('browserNotification').checked,
