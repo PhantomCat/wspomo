@@ -87,6 +87,7 @@ All settings are saved in browser cookies and persist between sessions.
 | Lunch start | 13:00 | Lunch break start |
 | Lunch end | 14:00 | Lunch break end |
 | Workday end | 18:00 | End of the work day |
+| Continue after workday | Off | Keep counting after the workday ends |
 | Sound | On | Play notification sounds |
 | Browser notifications | On | Show desktop notifications |
 | Language | Auto (browser) | ru / en |
@@ -95,6 +96,8 @@ All settings are saved in browser cookies and persist between sessions.
 
 ```
 wspomo/
+├── caddy/
+│   └── Caddyfile
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .dockerignore
@@ -103,6 +106,7 @@ wspomo/
 ├── package.json
 ├── server.js
 └── public/
+    ├── favicon.svg
     ├── index.html
     └── style.css
 ```
