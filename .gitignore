@@ -3,6 +3,7 @@ npm-debug.log*
 .env
 *.log
 .DS_Store
-TODO
+TODO.md
+IDEA.md
 logo/
 *.tar.gz
