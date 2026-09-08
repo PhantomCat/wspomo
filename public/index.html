@@ -626,7 +626,26 @@
       }
     }
 
+    function trackFocusDelta() {
+      if (state.running && state.mode === 'work') {
+        const nowMs = Date.now();
+        if (tracking.lastFocusMs !== null) {
+          const deltaMs = Math.min(nowMs - tracking.lastFocusMs, 5000); // tab throttling cap
+          tracking.focusMs += deltaMs;
+          if (tracking.focusMs >= 60000) {
+            const minutes = Math.floor(tracking.focusMs / 60000);
+            tracking.focusMs -= minutes * 60000;
+            trackHeartbeat(true, minutes).then(() => refreshFooterMetrics());
+          }
+        }
+        tracking.lastFocusMs = nowMs;
+      } else {
+        tracking.lastFocusMs = null;
+      }
+    }
+
     function tick() {
+      trackFocusDelta();
       if (state.timeLeft <= 0) {
         clearInterval(state.intervalId);
 
@@ -717,22 +736,6 @@
           updateDisplay();
           return;
         }
-      }
-
-      if (state.running && state.mode === 'work') {
-        const nowMs = Date.now();
-        if (tracking.lastFocusMs !== null) {
-          const deltaMs = Math.min(nowMs - tracking.lastFocusMs, 5000); // tab throttling cap
-          tracking.focusMs += deltaMs;
-          if (tracking.focusMs >= 60000) {
-            const minutes = Math.floor(tracking.focusMs / 60000);
-            tracking.focusMs -= minutes * 60000;
-            trackHeartbeat(true, minutes);
-          }
-        }
-        tracking.lastFocusMs = nowMs;
-      } else {
-        tracking.lastFocusMs = null;
       }
 
       state.timeLeft--;
