@@ -696,6 +696,7 @@ body {
 .footer {
   margin-top: auto;
   padding: 1.5rem 0;
+  text-align: center; /* centers inline-flex links on all widths */
 }
 
 .footer-links {
@@ -704,7 +705,6 @@ body {
   flex-wrap: wrap;
   justify-content: center;
 }
-
 /* fixed to the bottom-left of the screen, mirroring .site-header (top-left) */
 .footer-metrics {
   position: fixed;
@@ -717,13 +717,13 @@ body {
   z-index: 10;
 }
 
-/* narrow screens: back into flow, above the footer links */
+/* narrow screens: back into flow, above the footer links, spaced apart */
 @media (max-width: 768px) {
   .footer-metrics {
     position: static;
     display: block;
     text-align: center;
-    margin: 0.75rem 0.5rem 0;
+    margin: 0.5rem 0.5rem 1.25rem;
   }
 }
 

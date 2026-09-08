@@ -72,12 +72,12 @@ test('heartbeat: focus minute and pomodoro counted; live now visible', async () 
   const hb = await fetch(`${base}/api/track/heartbeat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', cookie: jar },
-    body: JSON.stringify({ focus: true, pomodoro: true })
+    body: JSON.stringify({ focus: true, minutes: 2, pomodoro: true })
   });
   assert.strictEqual((await hb.json()).ok, true, 'heartbeat ok');
 
   const stats = await (await fetch(`${base}/api/metrics/public`)).json();
-  assert.strictEqual(stats.today.focusMinutes, 1);
+  assert.strictEqual(stats.today.focusMinutes, 2);
   assert.strictEqual(stats.today.pomodoros, 1);
   assert.ok(stats.liveNow >= 1);
 });

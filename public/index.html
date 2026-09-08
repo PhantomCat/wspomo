@@ -720,11 +720,19 @@
       }
 
       if (state.running && state.mode === 'work') {
-        tracking.focusTicks++;
-        if (tracking.focusTicks >= 60) {
-          tracking.focusTicks -= 60;
-          trackHeartbeat(true);
+        const nowMs = Date.now();
+        if (tracking.lastFocusMs !== null) {
+          const deltaMs = Math.min(nowMs - tracking.lastFocusMs, 5000); // tab throttling cap
+          tracking.focusMs += deltaMs;
+          if (tracking.focusMs >= 60000) {
+            const minutes = Math.floor(tracking.focusMs / 60000);
+            tracking.focusMs -= minutes * 60000;
+            trackHeartbeat(true, minutes);
+          }
         }
+        tracking.lastFocusMs = nowMs;
+      } else {
+        tracking.lastFocusMs = null;
       }
 
       state.timeLeft--;
@@ -1111,8 +1119,8 @@
 
     const tracking = {
       live: false,
-      focusTicks: 0,
-      lastHeartbeat: 0
+      focusMs: 0,      // accumulated real focus time (ms) since last sent minute
+      lastFocusMs: null
     };
 
     async function trackVisit() {
@@ -1123,9 +1131,9 @@
       } catch (e) { /* metrics are best-effort */ }
     }
 
-    async function trackHeartbeat(force) {
-      // presence ping (no focus flag) or forced focus-minute from tick()
-      const payload = force ? { focus: true } : {};
+    async function trackHeartbeat(force, focusMinutes) {
+      // presence ping (no focus flag) or forced focus-minute(s) from tick()
+      const payload = force ? { focus: true, minutes: focusMinutes || 1 } : {};
       try {
         await fetch('/api/track/heartbeat', {
           method: 'POST',

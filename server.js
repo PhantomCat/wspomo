@@ -110,7 +110,8 @@ app.post('/api/track/heartbeat', (req, res) => {
   }
   metrics.heartbeat(uuid);
   if (req.body && req.body.focus) {
-    metrics.addFocusMinute(uuid);
+    const minutes = Math.min(Math.max(Math.floor(Number(req.body.minutes) || 1), 1), 10);
+    metrics.addFocusMinutes(uuid, minutes);
   }
   if (req.body && req.body.pomodoro) {
     metrics.addPomodoro();
