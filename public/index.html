@@ -496,7 +496,21 @@
       }
     }
 
+    /**
+     * Single funnel for every mode change. Counts a completed pomodoro when a
+     * work session ends (work → break/lunch/other). Dedupes rapid re-entry.
+     */
+    function registerModeTransition(newMode) {
+      const oldMode = state.mode;
+      if (oldMode === newMode) return;
+      if (oldMode === 'work' && newMode !== 'work') {
+        trackPomodoroCompleted();
+      }
+      return oldMode; // caller assigns state.mode = newMode afterwards
+    }
+
     function switchMode(mode, resetTimer = true) {
+      registerModeTransition(mode);
       state.mode = mode;
       if (resetTimer) {
         state.timeLeft = getDuration(mode);
@@ -653,7 +667,7 @@
           const synced = calculateSyncedTime();
         if (synced && (synced.type === 'work' || synced.type === 'break')) {
           triggerNotification(synced.mode);
-          if (state.mode === 'work') trackPomodoroCompleted();
+          registerModeTransition(synced.mode);
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           state.mode = synced.mode;
@@ -667,6 +681,7 @@
           return;
         }
           if (synced && synced.type === 'lunch') {
+            registerModeTransition('lunch');
             triggerNotification('lunch');
             state.timeLeft = synced.timeLeft;
             state.totalTime = synced.timeLeft;
@@ -679,6 +694,10 @@
             return;
           }
           if (synced && synced.type === 'after-work') {
+            if (state.mode === 'work') {
+              registerModeTransition('after-work');
+              state.mode = 'after-work';
+            }
             if (state.lastSyncType !== 'after-work') {
               triggerNotification('afterWork');
               state.lastSyncType = 'after-work';
@@ -711,11 +730,16 @@
           }
           state.lastSyncType = synced.type;
         }
+        // workday ended while timer ticks → close the running work session
+        if (synced && synced.type === 'after-work' && state.mode === 'work') {
+          registerModeTransition('after-work');
+          state.mode = 'after-work';
+        }
         if (synced && (synced.type === 'work' || synced.type === 'break')) {
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           if (synced.mode !== state.mode) {
-            if (state.mode === 'work') trackPomodoroCompleted();
+            registerModeTransition(synced.mode);
             triggerNotification(synced.mode);
             state.mode = synced.mode;
             state.currentSession = synced.session || state.currentSession;
@@ -727,6 +751,7 @@
         }
         if (synced && synced.type === 'lunch') {
           if (state.mode !== 'lunch') {
+            registerModeTransition('lunch');
             triggerNotification('lunch');
             state.mode = 'lunch';
             updateModeTabs();
