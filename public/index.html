@@ -711,7 +711,6 @@
 
         const nextMode = getNextMode();
         triggerNotification(nextMode);
-        if (state.mode === 'work') trackPomodoroCompleted();
         switchMode(nextMode);
         updateStartButton();
         $('startBtn').classList.remove('paused');
