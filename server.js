@@ -19,12 +19,19 @@
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const crypto = require('crypto');
+const { createMetrics } = require('./lib/metrics.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+
+const metrics = createMetrics({ dataDir: DATA_DIR });
+metrics.startFlushTimer();
 
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
 const COOKIE_OPTS = { maxAge: COOKIE_MAX_AGE, httpOnly: false, sameSite: 'lax', path: '/' };
+const VISITOR_COOKIE_OPTS = { maxAge: COOKIE_MAX_AGE, httpOnly: true, sameSite: 'lax', path: '/' };
 
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -73,6 +80,48 @@ app.post('/api/settings', (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- anonymous metrics ----------
+
+function getVisitorId(req) {
+  return typeof req.cookies.wspomo_visitor === 'string' && req.cookies.wspomo_visitor.length === 36
+    ? req.cookies.wspomo_visitor
+    : null;
+}
+
+app.post('/api/track/visit', (req, res) => {
+  let uuid = getVisitorId(req);
+  let isNew = false;
+
+  if (!uuid) {
+    uuid = crypto.randomUUID();
+    isNew = true;
+    res.cookie('wspomo_visitor', uuid, VISITOR_COOKIE_OPTS);
+  }
+
+  const todayKey = new Date().toISOString().slice(0, 10);
+  const result = metrics.touchVisitor(uuid, todayKey);
+  res.json({ ok: true, isNewVisitor: isNew || result.isNewVisitor });
+});
+
+app.post('/api/track/heartbeat', (req, res) => {
+  const uuid = getVisitorId(req);
+  if (!uuid) {
+    return res.status(400).json({ ok: false });
+  }
+  metrics.heartbeat(uuid);
+  if (req.body && req.body.focus) {
+    metrics.addFocusMinute(uuid);
+  }
+  if (req.body && req.body.pomodoro) {
+    metrics.addPomodoro();
+  }
+  res.json({ ok: true });
+});
+
+app.get('/api/metrics/public', (req, res) => {
+  res.json(metrics.publicStats());
+});
+
 function parseCookie(raw) {
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
@@ -103,6 +152,15 @@ if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`wspomo running on http://0.0.0.0:${PORT}`);
   });
+
+  process.on('SIGTERM', () => {
+    metrics.stop();
+    process.exit(0);
+  });
+  process.on('SIGINT', () => {
+    metrics.stop();
+    process.exit(0);
+  });
 }
 
-module.exports = { app, getDefaultSettings };
+module.exports = { app, getDefaultSettings, metrics };

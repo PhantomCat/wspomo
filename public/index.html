@@ -194,6 +194,7 @@
         <span data-i18n="catppuccin">Catppuccin</span>
       </a>
     </div>
+    <div class="footer-metrics" id="footerMetrics"></div>
   </footer>
 
   <script>
@@ -237,7 +238,13 @@
         beforeWork: 'До начала рабочего дня',
         afterWork: 'Рабочий день окончен',
         invalidTime: 'Неверный формат времени',
-        catppuccin: 'Catppuccin'
+        catppuccin: 'Catppuccin',
+        metricsLiveNow: 'в фокусе сейчас',
+        metricsToday: 'Сегодня',
+        metricsVisitors: 'посетителей',
+        metricsFocusHours: 'ч фокуса',
+        metricsFocusMinutes: 'мин фокуса',
+        metricsPomodoros: 'помодоро'
       },
       en: {
         settings: 'Settings',
@@ -276,7 +283,13 @@
         beforeWork: 'Before workday',
         afterWork: 'Workday ended',
         invalidTime: 'Invalid time format',
-        catppuccin: 'Catppuccin'
+        catppuccin: 'Catppuccin',
+        metricsLiveNow: 'focusing now',
+        metricsToday: 'Today',
+        metricsVisitors: 'visitors',
+        metricsFocusHours: 'h focused',
+        metricsFocusMinutes: 'min focused',
+        metricsPomodoros: 'pomodoros'
       }
     };
 
@@ -619,20 +632,21 @@
 
         if (settings.workdaySync) {
           const synced = calculateSyncedTime();
-          if (synced && (synced.type === 'work' || synced.type === 'break')) {
-            triggerNotification(synced.mode);
-            state.timeLeft = synced.timeLeft;
-            state.totalTime = synced.totalTime;
-            state.mode = synced.mode;
-            state.currentSession = synced.session || state.currentSession;
-            updateModeTabs();
-            updateDisplay();
-            updateSessionDots();
-            state.running = true;
-            updateStartButton();
-            state.intervalId = setInterval(tick, 1000);
-            return;
-          }
+        if (synced && (synced.type === 'work' || synced.type === 'break')) {
+          triggerNotification(synced.mode);
+          if (state.mode === 'work') trackPomodoroCompleted();
+          state.timeLeft = synced.timeLeft;
+          state.totalTime = synced.totalTime;
+          state.mode = synced.mode;
+          state.currentSession = synced.session || state.currentSession;
+          updateModeTabs();
+          updateDisplay();
+          updateSessionDots();
+          state.running = true;
+          updateStartButton();
+          state.intervalId = setInterval(tick, 1000);
+          return;
+        }
           if (synced && synced.type === 'lunch') {
             triggerNotification('lunch');
             state.timeLeft = synced.timeLeft;
@@ -659,6 +673,7 @@
 
         const nextMode = getNextMode();
         triggerNotification(nextMode);
+        if (state.mode === 'work') trackPomodoroCompleted();
         switchMode(nextMode);
         updateStartButton();
         $('startBtn').classList.remove('paused');
@@ -681,6 +696,7 @@
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.totalTime;
           if (synced.mode !== state.mode) {
+            if (state.mode === 'work') trackPomodoroCompleted();
             triggerNotification(synced.mode);
             state.mode = synced.mode;
             state.currentSession = synced.session || state.currentSession;
@@ -1083,6 +1099,80 @@
       });
     });
 
+    // ---------- anonymous usage tracking ----------
+
+    const tracking = {
+      live: false,
+      lastMinute: null
+    };
+
+    async function trackVisit() {
+      try {
+        await fetch('/api/track/visit', { method: 'POST' });
+        const res = await fetch('/api/metrics/public');
+        updateFooterMetrics(await res.json());
+      } catch (e) { /* metrics are best-effort */ }
+    }
+
+    async function trackHeartbeat() {
+      if (!state.running) return;
+      const isFocus = state.mode === 'work';
+      try {
+        await fetch('/api/track/heartbeat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ focus: isFocus })
+        });
+        if (isFocus) tracking.lastMinute = Math.floor(Date.now() / 60000);
+      } catch (e) { /* best-effort */ }
+    }
+
+    function trackPomodoroCompleted() {
+      fetch('/api/track/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pomodoro: true })
+      }).catch(() => {});
+    }
+
+    async function refreshFooterMetrics() {
+      try {
+        const res = await fetch('/api/metrics/public');
+        updateFooterMetrics(await res.json());
+      } catch (e) { /* best-effort */ }
+    }
+
+    function updateFooterMetrics(stats) {
+      const el = $('footerMetrics');
+      if (!el) return;
+      if (stats.totalVisitors < 10 && stats.liveNow === 0) {
+        el.textContent = '';
+        return;
+      }
+      const t = translations[settings.language] || translations.ru;
+      const focusHours = Math.floor(stats.today.focusMinutes / 60);
+      const parts = [];
+      if (stats.liveNow > 0) parts.push(`${stats.liveNow} ${t.metricsLiveNow}`);
+      parts.push(`${t.metricsToday}: ${stats.today.visitors} ${t.metricsVisitors}`);
+      if (stats.today.focusMinutes > 0) {
+        parts.push(stats.today.focusMinutes >= 60
+          ? `${focusHours} ${t.metricsFocusHours}`
+          : `${stats.today.focusMinutes} ${t.metricsFocusMinutes}`);
+      }
+      if (stats.today.pomodoros > 0) parts.push(`${stats.today.pomodoros} ${t.metricsPomodoros}`);
+      el.textContent = parts.join(' · ');
+    }
+
+    function initTracking() {
+      tracking.live = true;
+      trackVisit();
+      setInterval(() => {
+        // heartbeat each 60s while running; pomodoro completion counted on transitions
+        trackHeartbeat();
+        refreshFooterMetrics();
+      }, 60000);
+    }
+
     loadSettings().then(() => {
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
@@ -1092,6 +1182,7 @@
     applyTheme();
     updateDisplay();
     updateSessionDots();
-  </script>
+    initTracking();
+   </script>
 </body>
 </html>

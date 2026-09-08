@@ -76,6 +76,8 @@ npm start
 
 All settings are saved in browser cookies and persist between sessions.
 
+> **Cookies & privacy:** wspomo sets only the cookies listed in [public/PRIVACY.md](public/PRIVACY.md) — settings, language, theme, and one anonymous random UUID (no IP logging, no fingerprinting). See [PRIVACY.md](public/PRIVACY.md) for details.
+
 | Setting | Default | Description |
 |---|---|---|
 | Work duration | 25 min | Focus session length |

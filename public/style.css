@@ -705,6 +705,13 @@ body {
   justify-content: center;
 }
 
+.footer-metrics {
+  margin-top: 0.75rem;
+  font-size: 0.8125rem;
+  color: var(--overlay1);
+  min-height: 1.2em;
+}
+
 @media (max-width: 480px) {
   .container { padding: 1rem; }
   .timer-circle { width: 240px; height: 240px; }
