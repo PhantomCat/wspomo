@@ -87,10 +87,12 @@ test('normalizeRawTime: invalid input', () => {
 
 test('maskTimeValue: live typing masks', () => {
   assert.strictEqual(maskTimeValue('9'), '9');
-  assert.strictEqual(maskTimeValue('93'), '93');
-  assert.strictEqual(maskTimeValue('931'), '93:1'); // legacy mask: 2 digits + rest
-  assert.strictEqual(maskTimeValue('9310'), '93:10');
-  assert.strictEqual(maskTimeValue('99310'), '99:31'); // truncated to 4 digits
+  assert.strictEqual(maskTimeValue('93'), '93'); // could still be a 2-digit hour while typing
+  assert.strictEqual(maskTimeValue('931'), '9:31'); // 93 > 23 → single-digit hour
+  assert.strictEqual(maskTimeValue('9310'), '9:31'); // truncated to 4 digits, hour > 23 → H:MM
+  assert.strictEqual(maskTimeValue('135'), '13:5'); // 13 is a valid hour → HH:M
+  assert.strictEqual(maskTimeValue('1359'), '13:59');
+  assert.strictEqual(maskTimeValue('99310'), '9:93'); // truncated to 4 digits, hour > 23 → H:MM
   assert.strictEqual(maskTimeValue('ab12x34'), '12:34'); // non-digits stripped
   assert.strictEqual(maskTimeValue(''), '');
 });

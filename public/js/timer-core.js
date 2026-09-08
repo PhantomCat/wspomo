@@ -56,9 +56,14 @@ function normalizeRawTime(raw) {
 
 /**
  * Raw digit input → masked 'HH:MM'-style display value (never null — for live typing).
+ * If the first two digits can't be an hour (>23), treat as single-digit hour:
+ * '931' → '9:31' (normalizes on blur to '09:31').
  */
 function maskTimeValue(raw) {
   const digits = String(raw).replace(/[^\d]/g, '').slice(0, 4);
+  if (digits.length >= 3 && parseInt(digits.slice(0, 2), 10) > 23) {
+    return digits.slice(0, 1) + ':' + digits.slice(1, 3);
+  }
   if (digits.length <= 2) return digits;
   return digits.slice(0, 2) + ':' + digits.slice(2);
 }
