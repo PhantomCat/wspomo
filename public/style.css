@@ -703,13 +703,28 @@ body {
   gap: 0.75rem;
   flex-wrap: wrap;
   justify-content: center;
+  clear: both;
+}
+
+.footer {
+  overflow: hidden; /* contain floated metrics */
 }
 
 .footer-metrics {
-  margin-top: 0.75rem;
+  float: left;
   font-size: 0.8125rem;
-  color: var(--overlay1);
+  color: var(--ctp-overlay0);
   min-height: 1.2em;
+  text-align: left;
+}
+
+@media (max-width: 768px) {
+  .footer-metrics {
+    float: none;
+    display: block;
+    text-align: center;
+    margin-bottom: 0.5rem;
+  }
 }
 
 @media (max-width: 480px) {

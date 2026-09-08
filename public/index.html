@@ -719,6 +719,14 @@
         }
       }
 
+      if (state.running && state.mode === 'work') {
+        tracking.focusTicks++;
+        if (tracking.focusTicks >= 60) {
+          tracking.focusTicks -= 60;
+          trackHeartbeat(true);
+        }
+      }
+
       state.timeLeft--;
       updateDisplay();
     }
@@ -1103,7 +1111,8 @@
 
     const tracking = {
       live: false,
-      lastMinute: null
+      focusTicks: 0,
+      lastHeartbeat: 0
     };
 
     async function trackVisit() {
@@ -1114,16 +1123,15 @@
       } catch (e) { /* metrics are best-effort */ }
     }
 
-    async function trackHeartbeat() {
-      if (!state.running) return;
-      const isFocus = state.mode === 'work';
+    async function trackHeartbeat(force) {
+      // presence ping (no focus flag) or forced focus-minute from tick()
+      const payload = force ? { focus: true } : {};
       try {
         await fetch('/api/track/heartbeat', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ focus: isFocus })
+          body: JSON.stringify(payload)
         });
-        if (isFocus) tracking.lastMinute = Math.floor(Date.now() / 60000);
       } catch (e) { /* best-effort */ }
     }
 
@@ -1167,7 +1175,8 @@
       tracking.live = true;
       trackVisit();
       setInterval(() => {
-        // heartbeat each 60s while running; pomodoro completion counted on transitions
+        // presence ping every 60s (keeps "focusing now" alive); focus minutes
+        // are accumulated in tick() and sent as full minutes only
         trackHeartbeat();
         refreshFooterMetrics();
       }, 60000);
