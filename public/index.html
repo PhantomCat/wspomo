@@ -23,6 +23,7 @@
   <title>Pomodoro Timer</title>
   <link rel="icon" id="favicon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
+  <script src="js/timer-core.js"></script>
 </head>
 <body>
   <header class="site-header">
@@ -494,15 +495,13 @@
     }
 
     function getNextMode() {
-      if (state.mode === 'work') {
-        return state.currentSession >= settings.sessionsBeforeLongBreak ? 'longBreak' : 'shortBreak';
-      }
-      if (state.mode === 'shortBreak') {
-        state.currentSession++;
-        return 'work';
-      }
-      state.currentSession = 1;
-      return 'work';
+      const { nextMode, nextSession } = TimerCore.getNextModeCore(
+        state.mode,
+        state.currentSession,
+        settings.sessionsBeforeLongBreak
+      );
+      state.currentSession = nextSession;
+      return nextMode;
     }
 
     let audioCtx = null;
@@ -709,152 +708,24 @@
     }
 
     function calculateSyncedTime() {
-      const now = new Date();
-      const workDays = settings.workDays || [1, 2, 3, 4, 5];
-      if (!workDays.includes(now.getDay())) {
-        return null;
-      }
-
-      const [startH, startM] = settings.workdayStart.split(':').map(Number);
-      const [endH, endM] = settings.workdayEnd.split(':').map(Number);
-
-      const workdayStartSec = (startH * 60 + startM) * 60;
-      const workdayEndSec = (endH * 60 + endM) * 60;
-
-      const currentSec = now.getHours() * 3600 + now.getMinutes() * 60 + now.getSeconds();
-
-      if (currentSec < workdayStartSec) {
-        return { type: 'before-work', timeLeft: Math.ceil((workdayStartSec - currentSec)) };
-      }
-
-      if (currentSec >= workdayEndSec) {
-        return settings.continueAfterWorkday ? null : { type: 'after-work' };
-      }
-
-      let elapsed;
-
-      if (settings.lunchEnabled) {
-        const [lunchSH, lunchSM] = settings.lunchStart.split(':').map(Number);
-        const [lunchEH, lunchEM] = settings.lunchEnd.split(':').map(Number);
-        const lunchStartSec = (lunchSH * 60 + lunchSM) * 60;
-        const lunchEndSec = (lunchEH * 60 + lunchEM) * 60;
-
-        if (currentSec < lunchStartSec) {
-          elapsed = currentSec - workdayStartSec;
-        } else if (currentSec >= lunchStartSec && currentSec < lunchEndSec) {
-          return {
-            type: 'lunch',
-            timeLeft: Math.ceil(lunchEndSec - currentSec),
-            totalTime: lunchEndSec - lunchStartSec
-          };
-        } else {
-          elapsed = currentSec - lunchEndSec;
-        }
-      } else {
-        elapsed = currentSec - workdayStartSec;
-      }
-
-      const workSec = settings.workDuration * 60;
-      const shortBreakSec = settings.shortBreakDuration * 60;
-      const longBreakSec = settings.longBreakDuration * 60;
-
-      let accumulated = 0;
-      let session = 1;
-
-      while (true) {
-        const workEnd = accumulated + workSec;
-        if (elapsed < workEnd) {
-          return {
-            type: 'work',
-            timeLeft: Math.ceil(workEnd - elapsed),
-            totalTime: workSec,
-            mode: 'work',
-            session
-          };
-        }
-        accumulated = workEnd;
-
-        const isLongBreak = session >= settings.sessionsBeforeLongBreak;
-        const breakSec = isLongBreak ? longBreakSec : shortBreakSec;
-        const breakEnd = accumulated + breakSec;
-
-        if (elapsed < breakEnd) {
-          return {
-            type: 'break',
-            timeLeft: Math.ceil(breakEnd - elapsed),
-            totalTime: breakSec,
-            mode: isLongBreak ? 'longBreak' : 'shortBreak',
-            session
-          };
-        }
-        accumulated = breakEnd;
-
-        if (isLongBreak) session = 1;
-        else session++;
-      }
+      return TimerCore.calculateSyncedTimeCore(settings, new Date());
     }
 
     function validateLunchTimes(settingsObj) {
-      const [wsH, wsM] = settingsObj.workdayStart.split(':').map(Number);
-      const [weH, weM] = settingsObj.workdayEnd.split(':').map(Number);
-      const [lsH, lsM] = settingsObj.lunchStart.split(':').map(Number);
-      const [leH, leM] = settingsObj.lunchEnd.split(':').map(Number);
-
-      const wsMin = wsH * 60 + wsM;
-      const weMin = weH * 60 + weM;
-      const lsMin = lsH * 60 + lsM;
-      const leMin = leH * 60 + leM;
-
-      if (leMin <= lsMin) {
-        return { valid: false, reason: 'Конец обеда должен быть после начала обеда' };
-      }
-
-      if (leMin <= wsMin) {
-        return { valid: false, reason: 'Обед заканчивается до начала рабочего дня' };
-      }
-
-      if (lsMin >= weMin) {
-        return { valid: false, reason: 'Обед начинается после конца рабочего дня' };
-      }
-
-      if (lsMin <= wsMin && leMin >= weMin) {
-        return { valid: false, reason: 'Обед полностью покрывает рабочий день' };
-      }
-
-      if (lsMin < wsMin && leMin > wsMin && leMin < weMin) {
-        return { 
-          valid: false, 
-          reason: 'Обед пересекает начало рабочего дня',
-          adjustedWorkdayStart: settingsObj.lunchEnd
-        };
-      }
-
-      if (lsMin >= wsMin && lsMin < weMin && leMin > weMin) {
-        return { 
-          valid: false, 
-          reason: 'Обед пересекает конец рабочего дня',
-          adjustedWorkdayEnd: settingsObj.lunchStart
-        };
-      }
-
-      if (lsMin == wsMin && leMin < weMin) {
-        return { 
-          valid: false, 
-          reason: 'Обед начинается в момент начала рабочего дня',
-          adjustedWorkdayStart: settingsObj.lunchEnd
-        };
-      }
-
-      if (leMin == weMin && lsMin > wsMin) {
-        return { 
-          valid: false, 
-          reason: 'Обед заканчивается в момент конца рабочего дня',
-          adjustedWorkdayEnd: settingsObj.lunchStart
-        };
-      }
-
-      return { valid: true };
+      return TimerCore.validateLunchTimes(settingsObj);
     }
+
+    const lunchReasonTexts = {
+      invalidTime: 'Некорректное время',
+      lunchEndBeforeStart: 'Конец обеда должен быть после начала обеда',
+      lunchEndsBeforeWorkdayStart: 'Обед заканчивается до начала рабочего дня',
+      lunchStartsAfterWorkdayEnd: 'Обед начинается после конца рабочего дня',
+      lunchCoversWholeWorkday: 'Обед полностью покрывает рабочий день',
+      lunchCrossesWorkdayStart: 'Обед пересекает начало рабочего дня',
+      lunchCrossesWorkdayEnd: 'Обед пересекает конец рабочего дня',
+      lunchStartsAtWorkdayStart: 'Обед начинается в момент начала рабочего дня',
+      lunchEndsAtWorkdayEnd: 'Обед заканчивается в момент конца рабочего дня'
+    };
 
     function toggleLunchFields() {
       const lunchEnabled = $('lunchEnabled').checked;
@@ -877,15 +748,8 @@
     function applyTimeMask(input) {
       const pos = input.selectionStart;
       const beforeLen = input.value.length;
-      let raw = input.value.replace(/[^\d]/g, '');
-      if (raw.length > 4) raw = raw.slice(0, 4);
-      let formatted;
-      if (raw.length <= 2) {
-        formatted = raw;
-      } else {
-        formatted = raw.slice(0, 2) + ':' + raw.slice(2);
-      }
-      input.value = formatted;
+      input.value = TimerCore.maskTimeValue(input.value);
+      const formatted = input.value;
       const diff = formatted.length - beforeLen;
       if (diff === 1 && formatted[pos - 1] === ':') {
         input.setSelectionRange(pos + 1, pos + 1);
@@ -893,45 +757,26 @@
     }
 
     function validateTimeInput(input) {
-      const val = input.value;
-      const match = val.match(/^(\d{1,2}):(\d{2})$/);
-      if (!match) {
+      const minutes = TimerCore.parseTimeToMinutes(input.value);
+      if (minutes === null) {
         input.classList.add('invalid');
         return null;
       }
-      const h = parseInt(match[1], 10);
-      const m = parseInt(match[2], 10);
-      if (h > 23 || m > 59) {
-        input.classList.add('invalid');
-        return null;
-      }
+      const h = Math.floor(minutes / 60);
+      const m = minutes % 60;
       input.classList.remove('invalid');
       return String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
     }
 
     function normalizeTimeOnBlur(input) {
-      const raw = input.value.replace(/[^\d]/g, '');
-      let h, m;
-      if (raw.length === 1 || raw.length === 2) {
-        h = parseInt(raw, 10);
-        m = 0;
-      } else if (raw.length === 3) {
-        h = parseInt(raw.slice(0, 1), 10);
-        m = parseInt(raw.slice(1, 3), 10);
-      } else if (raw.length === 4) {
-        h = parseInt(raw.slice(0, 2), 10);
-        m = parseInt(raw.slice(2, 4), 10);
-      } else {
-        return validateTimeInput(input);
-      }
-      if (isNaN(h) || isNaN(m) || h > 23 || m > 59) {
+      const normalized = TimerCore.normalizeRawTime(input.value.replace(/[^\d]/g, ''));
+      if (normalized === null) {
         input.classList.add('invalid');
         return null;
       }
-      const result = String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
-      input.value = result;
+      input.value = normalized;
       input.classList.remove('invalid');
-      return result;
+      return normalized;
     }
 
     function initTimeInputs() {
@@ -1113,7 +958,7 @@
       if (newSettings.lunchEnabled) {
         const validation = validateLunchTimes(newSettings);
         if (!validation.valid) {
-          let message = validation.reason;
+          let message = lunchReasonTexts[validation.reasonCode] || validation.reasonCode;
           
           if (validation.adjustedWorkdayStart) {
             message += `. Начало рабочего дня скорректировано до ${validation.adjustedWorkdayStart}`;
