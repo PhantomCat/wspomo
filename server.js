@@ -130,23 +130,6 @@ app.get('/api/metrics/public', (req, res) => {
 // every caller shares the standalone (single-user) settings — the shape below
 // is already token-aware so headless clients never change their integration.
 
-function defaultStateConfig() {
-  return {
-    workDuration: 25,
-    shortBreakDuration: 5,
-    longBreakDuration: 15,
-    sessionsBeforeLongBreak: 4,
-    workdaySync: true,
-    workdayStart: '09:00',
-    lunchEnabled: true,
-    lunchStart: '13:00',
-    lunchEnd: '14:00',
-    workdayEnd: '18:00',
-    continueAfterWorkday: false,
-    workDays: [1, 2, 3, 4, 5]
-  };
-}
-
 function stateFromSynced(core, now) {
   return {
     synced: true,
@@ -199,12 +182,10 @@ function computeState(settings, now) {
     state.remainingSec = core.timeLeft;
     return state;
   }
-  if (core.type === 'after-work') {
-    const state = emptyState(now);
-    state.state = 'after-work';
-    return state;
-  }
-  return emptyState(now);
+  // core.type === 'after-work' — the only remaining contract value
+  const state = emptyState(now);
+  state.state = 'after-work';
+  return state;
 }
 
 function readBearerToken(req) {
@@ -217,7 +198,9 @@ app.get('/api/state', (req, res) => {
   // arrive with API tokens (11.10); standalone callers run on defaults today.
   const token = readBearerToken(req);
 
-  const settings = { ...getDefaultSettings(), ...defaultStateConfig() };
+  // State is always computed in workday-sync mode (KT-1: server-authoritative
+  // only for schedule chains); everything else comes from shared defaults.
+  const settings = { ...getDefaultSettings(), workdaySync: true };
   const now = new Date();
   const state = computeState(settings, now);
 
@@ -268,4 +251,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, getDefaultSettings, metrics, computeState, defaultStateConfig };
+module.exports = { app, getDefaultSettings, metrics, computeState };

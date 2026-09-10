@@ -7,8 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
-const { app } = require('../server.js');
-const timerCore = require('../public/js/timer-core.js');
+const { app, computeState } = require('../server.js');
 
 let server;
 let base;
@@ -26,7 +25,7 @@ test.after(() => {
 
 const SHAPE_KEYS = ['synced', 'state', 'mode', 'session', 'remainingSec', 'totalSec', 'lunch', 'serverTime'];
 
-// ---------- shape ----------
+// ---------- black-box: HTTP contract ----------
 
 test('GET /api/state returns token-aware shape', async () => {
   const res = await fetch(`${base}/api/state`);
@@ -54,156 +53,83 @@ test('request without Bearer has no auth field', async () => {
   assert.ok(!('auth' in data));
 });
 
-// ---------- replay agreement with timer-core ----------
+// ---------- unit: computeState (input → result, fixed dates) ----------
 
-/**
- * For a fixed instant, computeState must agree with calculateSyncedTimeCore.
- * Re-derives the expected answer independently through the core.
- */
-function assertAgreesWithCore(nowFn, label) {
-  test(`/api/state agrees with timer-core replay: ${label}`, async () => {
-    const fakeNow = new Date();
-    const core = timerCore.calculateSyncedTimeCore(defaultsForCore(), fakeNow);
-    const res = await fetch(`${base}/api/state`);
-    const data = await res.json();
+const SETTINGS = {
+  workDuration: 25,
+  shortBreakDuration: 5,
+  longBreakDuration: 15,
+  sessionsBeforeLongBreak: 4,
+  workdaySync: true,
+  workdayStart: '09:00',
+  lunchEnabled: true,
+  lunchStart: '13:00',
+  lunchEnd: '14:00',
+  workdayEnd: '18:00',
+  continueAfterWorkday: false,
+  workDays: [1, 2, 3, 4, 5]
+};
 
-    if (core === null) {
-      assert.strictEqual(data.synced, false);
-      assert.strictEqual(data.state, 'out-of-scope');
-      return;
-    }
-
-    assert.strictEqual(data.synced, true);
-
-    if (core.type === 'work' || core.type === 'break') {
-      assert.strictEqual(data.lunch, false);
-      assert.strictEqual(data.session, core.session);
-      assert.strictEqual(data.mode, core.mode);
-      assert.ok(Number.isFinite(data.remainingSec));
-      assert.ok(data.remainingSec >= 0);
-      assert.strictEqual(data.totalSec, core.totalTime);
-      assert.strictEqual(
-        data.state,
-        core.type === 'work' ? 'work' : 'break'
-      );
-    } else if (core.type === 'lunch') {
-      assert.strictEqual(data.lunch, true);
-      assert.strictEqual(data.mode, 'lunch');
-      assert.strictEqual(data.state, 'break');
-    } else if (core.type === 'before-work') {
-      assert.strictEqual(data.state, 'before-work');
-      assert.strictEqual(data.remainingSec, core.timeLeft);
-    } else if (core.type === 'after-work') {
-      assert.strictEqual(data.state, 'after-work');
-    }
-  });
+/** Next Thursday from a fixed base date — Thursday is in workDays. */
+function thursday(hours, minutes, seconds) {
+  // 2026-09-10 is a Thursday; fixed base keeps tests deterministic
+  const d = new Date(2026, 8, 10, hours, minutes, seconds, 0);
+  return d;
 }
 
-function defaultsForCore() {
-  return {
-    workDuration: 25,
-    shortBreakDuration: 5,
-    longBreakDuration: 15,
-    sessionsBeforeLongBreak: 4,
-    workdaySync: true,
-    workdayStart: '09:00',
-    lunchEnabled: true,
-    lunchStart: '13:00',
-    lunchEnd: '14:00',
-    workdayEnd: '18:00',
-    continueAfterWorkday: false,
-    workDays: [1, 2, 3, 4, 5]
-  };
-}
-
-// The live endpoint runs on server "now"; these checks bind the response to
-// the core replay computed moments earlier. A minute boundary crossing between
-// the two computations could flake — so we assert on the *class* of state
-// (deterministic for all seconds inside a minute except boundaries):
-// work minutes (09:15:30) and lunch minutes (13:30:30) are far from edges.
-
-test('/api/state mid-morning is work with sane countdown', async () => {
-  const res = await fetch(`${base}/api/state`);
-  const data = await res.json();
-  const now = new Date(data.serverTime);
-  const local = now.getHours() * 60 + now.getMinutes();
-  const isWorkday = defaultsForCore().workDays.includes(now.getDay());
-
-  if (!isWorkday || local < 9 * 60 || local >= 18 * 60 || (local >= 13 * 60 && local < 14 * 60)) {
-    assert.ok(data.synced === false || data.state !== 'idle');
-  } else {
-    // morning: inside the chain, before lunch
-    const core = timerCore.calculateSyncedTimeCore(defaultsForCore(), now);
-    if (core && (core.type === 'work' || core.type === 'break')) {
-      assert.strictEqual(data.mode, core.mode);
-      assert.strictEqual(data.session, core.session);
-    }
-  }
-});
-
-// ---------- pure computeState (unit level) ----------
-
-const { computeState, defaultStateConfig } = require('../server.js');
-
-test('computeState: lunch window maps to mode=lunch, state=break', () => {
-  // 2026-09-10 is a Thursday; 13:30 local — inside lunch for the test TZ-independent check we
-  // construct the Date explicitly and rely on calculateSyncedTimeCore semantics (local time).
-  const lunchNow = (() => {
-    const d = new Date();
-    d.setHours(13, 30, 0, 0);
-    // pick a workday for the constructed date
-    while (!defaultsForCore().workDays.includes(d.getDay())) d.setDate(d.getDate() + 1);
-    return d;
-  })();
-
-  const state = computeState({ ...defaultStateConfig() }, lunchNow);
-  if (state.state === 'break' && state.lunch) {
-    assert.strictEqual(state.mode, 'lunch');
-    assert.ok(state.remainingSec > 0 && state.remainingSec <= 30 * 60);
-  }
-});
-
-test('computeState: weekend is out-of-scope', () => {
-  // find next Sunday
-  const d = new Date();
-  while (d.getDay() !== 0) d.setDate(d.getDate() + 1);
-  d.setHours(12, 0, 0, 0);
-
-  const state = computeState({ ...defaultStateConfig() }, d);
-  assert.strictEqual(state.synced, false);
-  assert.strictEqual(state.state, 'out-of-scope');
-});
-
-test('computeState: before-work carries countdown to workday start', () => {
-  const d = new Date();
-  while (!defaultsForCore().workDays.includes(d.getDay())) d.setDate(d.getDate() + 1);
-  d.setHours(8, 0, 0, 0);
-
-  const state = computeState({ ...defaultStateConfig() }, d);
-  assert.strictEqual(state.state, 'before-work');
-  assert.strictEqual(state.remainingSec, 3600);
-  assert.strictEqual(state.mode, null);
-});
-
-test('computeState: after-work on continueAfterWorkday=true is out-of-scope', () => {
-  const d = new Date();
-  while (!defaultsForCore().workDays.includes(d.getDay())) d.setDate(d.getDate() + 1);
-  d.setHours(19, 0, 0, 0);
-
-  const state = computeState({ ...defaultStateConfig(), continueAfterWorkday: true }, d);
-  assert.strictEqual(state.synced, false);
-  assert.strictEqual(state.state, 'out-of-scope');
-});
-
-test('computeState: mid-workday falls inside a pomodoro chain step', () => {
-  const d = new Date();
-  while (!defaultsForCore().workDays.includes(d.getDay())) d.setDate(d.getDate() + 1);
-  d.setHours(9, 0, 30, 0); // 30 seconds after workday start → work, session 1
-
-  const state = computeState({ ...defaultStateConfig() }, d);
+test('computeState: 09:00:30 → work, session 1, countdown from 25:00', () => {
+  const state = computeState({ ...SETTINGS }, thursday(9, 0, 30));
   assert.strictEqual(state.state, 'work');
   assert.strictEqual(state.mode, 'work');
   assert.strictEqual(state.session, 1);
   assert.strictEqual(state.remainingSec, 25 * 60 - 30);
   assert.strictEqual(state.totalSec, 25 * 60);
+  assert.strictEqual(state.lunch, false);
+  assert.strictEqual(state.synced, true);
+});
+
+test('computeState: 09:26 → shortBreak, session 1', () => {
+  const state = computeState({ ...SETTINGS }, thursday(9, 26, 0));
+  assert.strictEqual(state.state, 'break');
+  assert.strictEqual(state.mode, 'shortBreak');
+  assert.strictEqual(state.session, 1);
+  assert.strictEqual(state.totalSec, 5 * 60);
+});
+
+test('computeState: 13:30 → lunch (state=break, mode=lunch)', () => {
+  const state = computeState({ ...SETTINGS }, thursday(13, 30, 0));
+  assert.strictEqual(state.state, 'break');
+  assert.strictEqual(state.lunch, true);
+  assert.strictEqual(state.mode, 'lunch');
+  assert.strictEqual(state.remainingSec, 30 * 60); // half of the lunch window left
+  assert.strictEqual(state.totalSec, 60 * 60); // full lunch window 13:00–14:00
+});
+
+test('computeState: 08:00 → before-work with 1h countdown, no mode', () => {
+  const state = computeState({ ...SETTINGS }, thursday(8, 0, 0));
+  assert.strictEqual(state.state, 'before-work');
+  assert.strictEqual(state.remainingSec, 3600);
+  assert.strictEqual(state.mode, null);
+  assert.strictEqual(state.session, null);
+});
+
+test('computeState: 19:00 → after-work', () => {
+  const state = computeState({ ...SETTINGS }, thursday(19, 0, 0));
+  assert.strictEqual(state.state, 'after-work');
+  assert.strictEqual(state.mode, null);
+  assert.strictEqual(state.remainingSec, null);
+});
+
+test('computeState: 19:00 with continueAfterWorkday → out-of-scope', () => {
+  const state = computeState({ ...SETTINGS, continueAfterWorkday: true }, thursday(19, 0, 0));
+  assert.strictEqual(state.synced, false);
+  assert.strictEqual(state.state, 'out-of-scope');
+});
+
+test('computeState: Sunday 12:00 → out-of-scope (weekend)', () => {
+  // 2026-09-13 is a Sunday
+  const d = new Date(2026, 8, 13, 12, 0, 0, 0);
+  const state = computeState({ ...SETTINGS }, d);
+  assert.strictEqual(state.synced, false);
+  assert.strictEqual(state.state, 'out-of-scope');
 });
