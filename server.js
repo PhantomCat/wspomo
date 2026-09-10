@@ -21,6 +21,7 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const crypto = require('crypto');
 const { createMetrics } = require('./lib/metrics.js');
+const timerCore = require('./public/js/timer-core.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -123,6 +124,109 @@ app.get('/api/metrics/public', (req, res) => {
   res.json(metrics.publicStats());
 });
 
+// ---------- GET /api/state (headless clients: waybar, TUI, ...) ----------
+// Replay-computed timer state from the workday schedule (KT-1 decision 09.09).
+// Auth seam: API tokens arrive as Bearer headers (implemented 11.10); for now
+// every caller shares the standalone (single-user) settings — the shape below
+// is already token-aware so headless clients never change their integration.
+
+function defaultStateConfig() {
+  return {
+    workDuration: 25,
+    shortBreakDuration: 5,
+    longBreakDuration: 15,
+    sessionsBeforeLongBreak: 4,
+    workdaySync: true,
+    workdayStart: '09:00',
+    lunchEnabled: true,
+    lunchStart: '13:00',
+    lunchEnd: '14:00',
+    workdayEnd: '18:00',
+    continueAfterWorkday: false,
+    workDays: [1, 2, 3, 4, 5]
+  };
+}
+
+function stateFromSynced(core, now) {
+  return {
+    synced: true,
+    state: core.type === 'work' ? 'work' : 'break',
+    mode: core.mode,
+    session: core.session,
+    remainingSec: core.timeLeft,
+    totalSec: core.totalTime,
+    lunch: false,
+    serverTime: now.toISOString()
+  };
+}
+
+function emptyState(now) {
+  return {
+    synced: true,
+    state: 'idle',
+    mode: null,
+    session: null,
+    remainingSec: null,
+    totalSec: null,
+    lunch: false,
+    serverTime: now.toISOString()
+  };
+}
+
+function computeState(settings, now) {
+  const core = timerCore.calculateSyncedTimeCore(settings, now);
+
+  if (core === null) {
+    // weekend or continueAfterWorkday past end — no timer chain running
+    return { synced: false, state: 'out-of-scope', serverTime: now.toISOString() };
+  }
+
+  if (core.type === 'work' || core.type === 'break') {
+    return stateFromSynced(core, now);
+  }
+  if (core.type === 'lunch') {
+    const lunchState = stateFromSynced(
+      { type: 'break', mode: 'lunch', session: null, timeLeft: core.timeLeft, totalTime: core.totalTime },
+      now
+    );
+    lunchState.mode = 'lunch';
+    lunchState.lunch = true;
+    return lunchState;
+  }
+  if (core.type === 'before-work') {
+    const state = emptyState(now);
+    state.state = 'before-work';
+    state.remainingSec = core.timeLeft;
+    return state;
+  }
+  if (core.type === 'after-work') {
+    const state = emptyState(now);
+    state.state = 'after-work';
+    return state;
+  }
+  return emptyState(now);
+}
+
+function readBearerToken(req) {
+  const header = req.headers.authorization || '';
+  return header.startsWith('Bearer ') ? header.slice(7) : null;
+}
+
+app.get('/api/state', (req, res) => {
+  // auth seam (KT-1): per-user settings + server-authoritative chain lookup
+  // arrive with API tokens (11.10); standalone callers run on defaults today.
+  const token = readBearerToken(req);
+
+  const settings = { ...getDefaultSettings(), ...defaultStateConfig() };
+  const now = new Date();
+  const state = computeState(settings, now);
+
+  if (token) {
+    state.auth = 'recognized'; // placeholder until token store (11.10)
+  }
+  res.json(state);
+});
+
 function parseCookie(raw) {
   if (!raw) return null;
   try { return JSON.parse(raw); } catch { return null; }
@@ -164,4 +268,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, getDefaultSettings, metrics };
+module.exports = { app, getDefaultSettings, metrics, computeState, defaultStateConfig };
