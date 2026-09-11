@@ -862,6 +862,7 @@
         updateStartButton();
         updateTitle();
         $('startBtn').classList.add('paused');
+        sendActiveReport(); // paused → report cleared, waybar back to schedule
         return;
       }
 
@@ -918,6 +919,7 @@
       switchMode('work');
       updateStartButton();
       $('startBtn').classList.remove('paused');
+      sendActiveReport();
     }
 
     function skipSession() {
@@ -927,6 +929,7 @@
       switchMode(nextMode);
       updateStartButton();
       $('startBtn').classList.remove('paused');
+      sendActiveReport();
     }
 
     async function loadSettings() {
@@ -1158,9 +1161,11 @@
       } catch (e) { /* metrics are best-effort */ }
     }
 
-    async function trackHeartbeat(force, focusMinutes) {
-      // presence ping (no focus flag) or forced focus-minute(s) from tick()
+    async function trackHeartbeat(force, focusMinutes, active) {
+      // presence ping (no focus flag), forced focus-minute(s) from tick(),
+      // or active-report relay (running timer state for /api/state consumers)
       const payload = force ? { focus: true, minutes: focusMinutes || 1 } : {};
+      if (active !== undefined) payload.active = active;
       try {
         await fetch('/api/track/heartbeat', {
           method: 'POST',
@@ -1168,6 +1173,15 @@
           body: JSON.stringify(payload)
         });
       } catch (e) { /* best-effort */ }
+    }
+
+    // Relay the current timer state so headless consumers (waybar) mirror the
+    // page. Best-effort: tracking failures never affect the timer.
+    function sendActiveReport() {
+      const active = state.running
+        ? { mode: state.mode, remainingSec: state.timeLeft, totalSec: state.totalTime, session: state.mode === 'work' ? state.currentSession : null }
+        : null; // null → server clears the report (idle)
+      trackHeartbeat(false, null, active);
     }
 
     function trackPomodoroCompleted() {
@@ -1209,10 +1223,12 @@
     function initTracking() {
       tracking.live = true;
       trackVisit();
+      sendActiveReport();
       setInterval(() => {
         // presence ping every 60s (keeps "focusing now" alive); focus minutes
         // are accumulated in tick() and sent as full minutes only
         trackHeartbeat();
+        sendActiveReport();
         refreshFooterMetrics();
       }, 60000);
     }

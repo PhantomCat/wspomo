@@ -104,12 +104,55 @@ app.post('/api/track/visit', (req, res) => {
   res.json({ ok: true, isNewVisitor: isNew || result.isNewVisitor });
 });
 
+// ---------- active-report: browser relays its running timer state ----------
+// KT-1: free-form lives in the browser; the server only re-broadcasts what a
+// client reports. TTL ~90s: browser closed → report expires → /api/state
+// falls back to schedule replay. Until auth (11.10) the report is global
+// (standalone is single-user); with API tokens this becomes per-user.
+
+const ACTIVE_TTL_MS = 90 * 1000;
+const activeReports = new Map(); // uuid → { report, seenMs }
+
+function readVisitorId(req) {
+  return getVisitorId(req);
+}
+
+function parseActiveReport(body) {
+  if (!body || typeof body !== 'object') return null;
+  const mode = body.mode;
+  const remainingSec = Math.floor(Number(body.remainingSec));
+  const totalSec = Math.floor(Number(body.totalSec));
+  if (!['work', 'shortBreak', 'longBreak', 'lunch'].includes(mode)) return null;
+  if (!Number.isFinite(remainingSec) || remainingSec < 0 || remainingSec > 24 * 3600) return null;
+  if (!Number.isFinite(totalSec) || totalSec <= 0 || totalSec > 24 * 3600) return null;
+  const report = {
+    synced: true,
+    state: mode === 'work' ? 'work' : 'break',
+    mode,
+    session: body.session != null ? Math.floor(Number(body.session)) || null : null,
+    remainingSec,
+    totalSec,
+    lunch: mode === 'lunch',
+    source: 'client',
+    serverTime: new Date().toISOString()
+  };
+  return report;
+}
+
 app.post('/api/track/heartbeat', (req, res) => {
   const uuid = getVisitorId(req);
   if (!uuid) {
     return res.status(400).json({ ok: false });
   }
   metrics.heartbeat(uuid);
+  if (req.body && req.body.active !== undefined) {
+    if (req.body.active === null) {
+      activeReports.delete(uuid); // browser signalled idle → drop report
+    } else {
+      const report = parseActiveReport(req.body.active);
+      if (report) activeReports.set(uuid, { report, seenMs: Date.now() });
+    }
+  }
   if (req.body && req.body.focus) {
     const minutes = Math.min(Math.max(Math.floor(Number(req.body.minutes) || 1), 1), 10);
     metrics.addFocusMinutes(uuid, minutes);
@@ -119,6 +162,21 @@ app.post('/api/track/heartbeat', (req, res) => {
   }
   res.json({ ok: true });
 });
+
+function latestActiveReport() {
+  const cutoff = Date.now() - ACTIVE_TTL_MS;
+  let best = null;
+  for (const [uuid, entry] of activeReports) {
+    if (entry.seenMs < cutoff) {
+      activeReports.delete(uuid);
+      continue;
+    }
+    if (entry.report && (!best || entry.seenMs > best.seenMs)) {
+      best = entry;
+    }
+  }
+  return best ? best.report : null;
+}
 
 app.get('/api/metrics/public', (req, res) => {
   res.json(metrics.publicStats());
@@ -197,6 +255,14 @@ app.get('/api/state', (req, res) => {
   // auth seam (KT-1): per-user settings + server-authoritative chain lookup
   // arrive with API tokens (11.10); standalone callers run on defaults today.
   const token = readBearerToken(req);
+
+  // Priority: fresh client active-report (browser relays free-form AND synced
+  // runs) → schedule replay. Free-form is never computed by the server (KT-1).
+  const active = latestActiveReport();
+  if (active) {
+    if (token) active.auth = 'recognized';
+    return res.json(active);
+  }
 
   // State is always computed in workday-sync mode (KT-1: server-authoritative
   // only for schedule chains); everything else comes from shared defaults.
