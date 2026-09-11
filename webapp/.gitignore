@@ -8,3 +8,7 @@ IDEA.md
 data/
 logo/
 *.tar.gz
+
+# local artifacts
+*.tar.gz
+waybar-plugin/
