@@ -100,10 +100,26 @@ test('active report (work, free-form) is relayed by /api/state', async () => {
   assert.strictEqual(state.state, 'work');
   assert.strictEqual(state.mode, 'work');
   assert.strictEqual(state.session, 2);
-  assert.strictEqual(state.remainingSec, 960);
+  // snapshot ticks forward server-side (interpolation between relays)
+  assert.ok(state.remainingSec <= 960 && state.remainingSec >= 950,
+    `expected 950..960 after tick-forward, got ${state.remainingSec}`);
   assert.strictEqual(state.totalSec, 1500);
   assert.strictEqual(state.lunch, false);
   assert.strictEqual(state.synced, true);
+});
+
+test('snapshot interpolation: remainingSec decreases with elapsed time', async () => {
+  await clearAllReports();
+  const cookie = await newVisitor();
+  await reportActive(cookie, { mode: 'work', remainingSec: 300, totalSec: 1500 });
+  const first = await getState(cookie);
+  await new Promise((r) => setTimeout(r, 2100));
+  const second = await getState(cookie);
+  assert.strictEqual(second.source, 'client');
+  assert.ok(
+    second.remainingSec <= first.remainingSec - 2,
+    `expected >=2s decay: ${first.remainingSec} -> ${second.remainingSec}`
+  );
 });
 
 test('active report lunch → state=break, mode=lunch, lunch=true', async () => {

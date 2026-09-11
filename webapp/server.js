@@ -175,7 +175,12 @@ function latestActiveReport() {
       best = entry;
     }
   }
-  return best ? best.report : null;
+  if (!best) return null;
+  // The report is a snapshot taken at seenMs (relays arrive every ~60s).
+  // Tick it forward so pollers see a live countdown instead of a stale one.
+  const elapsed = Math.floor((Date.now() - best.seenMs) / 1000);
+  const remainingSec = Math.max(0, best.report.remainingSec - elapsed);
+  return { ...best.report, remainingSec, serverTime: new Date().toISOString() };
 }
 
 app.get('/api/metrics/public', (req, res) => {
