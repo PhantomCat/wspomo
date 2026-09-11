@@ -677,6 +677,7 @@
           updateSessionDots();
           state.running = true;
           updateStartButton();
+          sendActiveReport(); // synced work/break chain step
           state.intervalId = setInterval(tick, 1000);
           return;
         }
@@ -690,6 +691,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            sendActiveReport(); // synced lunch step
             state.intervalId = setInterval(tick, 1000);
             return;
           }
@@ -705,6 +707,7 @@
             state.running = false;
             updateStartButton();
             updateDisplay();
+            sendActiveReport(); // stopped → clear report, waybar back to replay
             return;
           }
         }
@@ -717,6 +720,7 @@
 
         state.running = true;
         updateStartButton();
+        sendActiveReport(); // manual chain transition
         state.intervalId = setInterval(tick, 1000);
         return;
       }
@@ -733,6 +737,7 @@
         if (synced && synced.type === 'after-work' && state.mode === 'work') {
           registerModeTransition('after-work');
           state.mode = 'after-work';
+          sendActiveReport(); // stopped → clear report
         }
         if (synced && (synced.type === 'work' || synced.type === 'break')) {
           state.timeLeft = synced.timeLeft;
@@ -744,6 +749,7 @@
             state.currentSession = synced.session || state.currentSession;
             updateModeTabs();
             updateSessionDots();
+            sendActiveReport(); // mode changed mid-chain
           }
           updateDisplay();
           return;
@@ -754,6 +760,7 @@
             triggerNotification('lunch');
             state.mode = 'lunch';
             updateModeTabs();
+            sendActiveReport(); // mode changed mid-timer (lunch)
           }
           state.timeLeft = synced.timeLeft;
           state.totalTime = synced.timeLeft;
@@ -877,10 +884,12 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            sendActiveReport(); // started (before-work countdown)
             state.intervalId = setInterval(tick, 1000);
             return;
           }
           if (synced.type === 'after-work') {
+            sendActiveReport(); // nothing started → clear stale report
             return;
           }
           if (synced.type === 'lunch') {
@@ -891,6 +900,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            sendActiveReport(); // started (lunch)
             state.intervalId = setInterval(tick, 1000);
             return;
           }
@@ -909,6 +919,7 @@
       state.running = true;
       updateStartButton();
       $('startBtn').classList.remove('paused');
+      sendActiveReport(); // started
       state.intervalId = setInterval(tick, 1000);
     }
 

@@ -224,7 +224,7 @@ function computeState(settings, now) {
 
   if (core === null) {
     // weekend or continueAfterWorkday past end — no timer chain running
-    return { synced: false, state: 'out-of-scope', serverTime: now.toISOString() };
+    return { ...emptyState(now), synced: false, state: 'out-of-scope' };
   }
 
   if (core.type === 'work' || core.type === 'break') {

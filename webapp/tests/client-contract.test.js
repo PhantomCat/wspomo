@@ -34,3 +34,22 @@ test('pomodoro hook: focus delta runs before early returns in tick()', () => {
   const tickBody = html.slice(html.indexOf('function tick()'), html.indexOf('function calculateSyncedTime()'));
   assert.ok(tickBody.includes('trackFocusDelta();'), 'trackFocusDelta must be first in tick()');
 });
+test('active-report: relay fires at every timer state change', () => {
+  // every start/transition/stop path must relay immediately — otherwise waybar
+  // shows the previous mode for up to 60s (regression fixed 12.09)
+  const calls = [...html.matchAll(/sendActiveReport\(\)/g)];
+  // definition (function sendActiveReport) + >= 11 call sites
+  assert.strictEqual(calls.length, 17,
+    `expected definition + 11 call sites, found ${calls.length}`);
+  // key sites: start (3 branches + final), transitions in tick (both halves), stop paths
+  const tickBody = html.slice(html.indexOf('function tick()'), html.indexOf('function calculateSyncedTime()'));
+  const tickCalls = [...tickBody.matchAll(/sendActiveReport\(\)/g)].length;
+  assert.ok(tickCalls >= 6, `tick() must relay on every transition, found ${tickCalls}`);
+  const startBody = html.slice(html.indexOf('function startTimer'), html.indexOf('function resetTimer'));
+  const startCalls = [...startBody.matchAll(/sendActiveReport\(\)/g)].length;
+  assert.ok(startCalls >= 5, `startTimer must relay on every branch, found ${startCalls}`);
+  const resetBody = html.slice(html.indexOf('function resetTimer'), html.indexOf('function skipSession'));
+  assert.ok(resetBody.includes('sendActiveReport()'), 'resetTimer must relay');
+  const skipBody = html.slice(html.indexOf('function skipSession'), html.indexOf('async function loadSettings'));
+  assert.ok(skipBody.includes('sendActiveReport()'), 'skipSession must relay');
+});
