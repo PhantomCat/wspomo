@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch: # manual rerun without an extra push
 
 permissions:
   contents: read
@@ -54,14 +55,17 @@ jobs:
           curl -sf http://127.0.0.1:3000/api/state > /dev/null
           docker rm -f wspomo-sanity
       - name: login to ghcr
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: tag and push ghcr.io/phantomcat/wspomo:latest
-        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        if: github.ref == 'refs/heads/main'
+        # ghcr requires lowercase image names — github.repository_owner keeps
+        # the login's case (PhantomCat) → invalid reference format. Lowercase it.
         run: |
-          docker tag wspomo:ci ghcr.io/${{ github.repository_owner }}/wspomo:latest
-          docker push ghcr.io/${{ github.repository_owner }}/wspomo:latest
+          IMAGE=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/wspomo
+          docker tag wspomo:ci "$IMAGE:latest"
+          docker push "$IMAGE:latest"
