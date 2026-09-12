@@ -2,10 +2,15 @@ node_modules
 npm-debug.log
 .git
 .gitignore
-*.md
+# root-level docs are repo meta; public/PRIVACY.md must stay in the image,
+# db/schema.sql must too (storage.init reads it) — so no *.md / db/ rules here
+README.md
+README.ru.md
 .env
 caddy/
 logo/
 *.tar.gz
 TODO.md
 IDEA.md
+tests/
+.github/
