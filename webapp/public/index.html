@@ -298,6 +298,13 @@
       return lang.startsWith('en') ? 'en' : 'ru';
     }
 
+    function detectBrowserTimezone() {
+      // IANA zone for schedule computation on the server side (KT-1/11.09);
+      // user can override in settings later
+      try { return Intl.DateTimeFormat().resolvedOptions().timeZone || null; }
+      catch (e) { return null; }
+    }
+
     let settings = {
       workDuration: 25,
       shortBreakDuration: 5,
@@ -314,7 +321,8 @@
       soundEnabled: true,
       browserNotification: true,
       language: detectBrowserLanguage(),
-      theme: 'mocha'
+      theme: 'mocha',
+      timezone: detectBrowserTimezone()
     };
 
     let state = {

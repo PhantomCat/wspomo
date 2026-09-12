@@ -136,3 +136,39 @@ test('computeState: Sunday 12:00 → out-of-scope (weekend)', () => {
   assert.strictEqual(state.synced, false);
   assert.strictEqual(state.state, 'out-of-scope');
 });
+// ---------- timezone-aware replay (11.09 decision: user TZ, not host UTC) ----------
+
+test('nowInTz: unknown zone → null, empty → server local time', () => {
+  const { nowInTz } = require('../server.js');
+  assert.strictEqual(nowInTz('Mars/Olympus'), null);
+  assert.strictEqual(nowInTz('Not/AZone'), null);
+  assert.ok(nowInTz(undefined) instanceof Date);
+  assert.strictEqual(nowInTz('Europe/Moscow') instanceof Date, true);
+});
+
+test('nowInTz: wall time matches Intl for a known zone', () => {
+  const { nowInTz } = require('../server.js');
+  const zone = 'Pacific/Auckland';
+  const d = nowInTz(zone);
+  const parts = {};
+  for (const p of new Intl.DateTimeFormat('en-US', {
+    timeZone: zone, hourCycle: 'h23', weekday: 'short',
+    year: 'numeric', month: '2-digit', day: '2-digit',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  }).formatToParts(new Date())) {
+    if (p.type !== 'literal') parts[p.type] = p.value;
+  }
+  const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+  assert.strictEqual(d.getHours(), Number(parts.hour));
+  assert.strictEqual(d.getDate(), Number(parts.day));
+  assert.strictEqual(d.getDay(), dayIdx);
+});
+
+test('GET /api/state?tz=... invalid → 400, valid → 200', async () => {
+  const bad = await fetch(`${base}/api/state?tz=Mars/Olympus`);
+  assert.strictEqual(bad.status, 400);
+  const ok = await fetch(`${base}/api/state?tz=Europe/Berlin`);
+  assert.strictEqual(ok.status, 200);
+  const data = await ok.json();
+  assert.strictEqual(typeof data.serverTime, 'string');
+});
