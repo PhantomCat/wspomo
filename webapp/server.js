@@ -21,14 +21,64 @@ const cookieParser = require('cookie-parser');
 const path = require('path');
 const crypto = require('crypto');
 const { createMetrics } = require('./lib/metrics.js');
+const { createStorage } = require('./lib/storage.js');
 const timerCore = require('./public/js/timer-core.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+const DATABASE_URL = process.env.DATABASE_URL || '';
 
 const metrics = createMetrics({ dataDir: DATA_DIR });
 metrics.startFlushTimer();
+
+// Postgres storage (KT-1: schema ready, metrics migrate JSON -> DB).
+// Without DATABASE_URL the server runs file-backed (standalone docker
+// without the pg service) — every metrics call falls through to JSON.
+const storage = createStorage({ databaseUrl: DATABASE_URL });
+const metricsDb = storage !== null; // DB present → aggregates go to Postgres
+
+if (metricsDb) {
+  storage.init().catch((e) => {
+    console.error('storage init failed:', e.message);
+    process.exit(1); // misconfigured DB must fail fast, not silently degrade
+  });
+}
+
+// Metrics write path: DB when configured, JSON otherwise. Reads prefer the
+// DB; the JSON store still flushes so a DB-less instance keeps working.
+async function trackVisitor(uuid, day) {
+  if (metricsDb) {
+    await storage.touchVisitor(uuid, day);
+    return;
+  }
+  metrics.touchVisitor(uuid, day);
+}
+async function trackFocusMinutes(uuid, day, minutes) {
+  if (metricsDb) {
+    await storage.addFocusMinutes(day, minutes);
+    return;
+  }
+  metrics.addFocusMinutes(uuid, minutes);
+}
+async function trackPomodoro(day) {
+  if (metricsDb) {
+    await storage.addPomodoro(day);
+    return;
+  }
+  metrics.addPomodoro();
+}
+async function getPublicStats(today) {
+  if (metricsDb) {
+    try {
+      return await storage.publicStats(today);
+    } catch (e) {
+      console.error('metrics db read failed:', e.message);
+      // fall through to JSON snapshot
+    }
+  }
+  return metrics.publicStats();
+}
 
 const COOKIE_MAX_AGE = 365 * 24 * 60 * 60 * 1000;
 const COOKIE_OPTS = { maxAge: COOKIE_MAX_AGE, httpOnly: false, sameSite: 'lax', path: '/' };
@@ -89,7 +139,7 @@ function getVisitorId(req) {
     : null;
 }
 
-app.post('/api/track/visit', (req, res) => {
+app.post('/api/track/visit', async (req, res) => {
   let uuid = getVisitorId(req);
   let isNew = false;
 
@@ -100,8 +150,13 @@ app.post('/api/track/visit', (req, res) => {
   }
 
   const todayKey = new Date().toISOString().slice(0, 10);
-  const result = metrics.touchVisitor(uuid, todayKey);
-  res.json({ ok: true, isNewVisitor: isNew || result.isNewVisitor });
+  try {
+    await trackVisitor(uuid, todayKey);
+  } catch (e) {
+    console.error('track visit failed:', e.message);
+    metrics.touchVisitor(uuid, todayKey); // best-effort fallback to file store
+  }
+  res.json({ ok: true, isNewVisitor: isNew });
 });
 
 // ---------- active-report: browser relays its running timer state ----------
@@ -139,12 +194,13 @@ function parseActiveReport(body) {
   return report;
 }
 
-app.post('/api/track/heartbeat', (req, res) => {
+app.post('/api/track/heartbeat', async (req, res) => {
   const uuid = getVisitorId(req);
   if (!uuid) {
     return res.status(400).json({ ok: false });
   }
   metrics.heartbeat(uuid);
+  const todayKey = new Date().toISOString().slice(0, 10);
   if (req.body && req.body.active !== undefined) {
     if (req.body.active === null) {
       activeReports.delete(uuid); // browser signalled idle → drop report
@@ -153,12 +209,17 @@ app.post('/api/track/heartbeat', (req, res) => {
       if (report) activeReports.set(uuid, { report, seenMs: Date.now() });
     }
   }
-  if (req.body && req.body.focus) {
-    const minutes = Math.min(Math.max(Math.floor(Number(req.body.minutes) || 1), 1), 10);
-    metrics.addFocusMinutes(uuid, minutes);
-  }
-  if (req.body && req.body.pomodoro) {
-    metrics.addPomodoro();
+  try {
+    if (req.body && req.body.focus) {
+      const minutes = Math.min(Math.max(Math.floor(Number(req.body.minutes) || 1), 1), 10);
+      await trackFocusMinutes(uuid, todayKey, minutes);
+    }
+    if (req.body && req.body.pomodoro) {
+      await trackPomodoro(todayKey);
+    }
+  } catch (e) {
+    console.error('heartbeat metrics failed:', e.message);
+    // metrics are best-effort: presence and active-report already accepted
   }
   res.json({ ok: true });
 });
@@ -183,8 +244,13 @@ function latestActiveReport() {
   return { ...best.report, remainingSec, serverTime: new Date().toISOString() };
 }
 
-app.get('/api/metrics/public', (req, res) => {
-  res.json(metrics.publicStats());
+app.get('/api/metrics/public', async (req, res) => {
+  try {
+    res.json(await getPublicStats(new Date().toISOString().slice(0, 10)));
+  } catch (e) {
+    console.error('public stats failed:', e.message);
+    res.json(metrics.publicStats());
+  }
 });
 
 // ---------- GET /api/state (headless clients: waybar, TUI, ...) ----------
@@ -314,6 +380,7 @@ if (require.main === module) {
 
   process.on('SIGTERM', () => {
     metrics.stop();
+    if (storage) storage.close().catch(() => {});
     process.exit(0);
   });
   process.on('SIGINT', () => {
@@ -322,4 +389,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, getDefaultSettings, metrics, computeState };
+module.exports = { app, getDefaultSettings, metrics, computeState, storage };

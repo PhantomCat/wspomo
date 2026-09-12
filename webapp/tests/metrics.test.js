@@ -14,6 +14,9 @@ const path = require('node:path');
 // fresh DATA_DIR per run
 const dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'wspomo-metrics-'));
 process.env.DATA_DIR = dataDir;
+// these tests verify the file-backed path — force it even when a DATABASE_URL
+// is exported in the environment (storage path has its own tests)
+delete process.env.DATABASE_URL;
 
 const { app, metrics } = require('../server.js');
 

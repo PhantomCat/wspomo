@@ -7,6 +7,9 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+// file-backed path (storage has its own tests against a live database)
+delete process.env.DATABASE_URL;
+
 const { app, computeState } = require('../server.js');
 
 let server;

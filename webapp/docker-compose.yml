@@ -21,11 +21,36 @@ services:
     ports:
       - 3000:3000
     restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - DATABASE_URL=postgres://wspomo:${POSTGRES_PASSWORD:-wspomo}@postgres:5432/wspomo
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
       interval: 30s
       timeout: 5s
       retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: wspomo-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=wspomo
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-wspomo}
+      - POSTGRES_DB=wspomo
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    # tuned down for small VPS (KT-1: shared_buffers modest, wal kept small)
+    command: postgres -c shared_buffers=128MB -c max_connections=40 -c wal_level=minimal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U wspomo -d wspomo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:
