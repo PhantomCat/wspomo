@@ -34,11 +34,8 @@ jobs:
         with:
           node-version: 20
           cache: npm
-          cache-dependency-path: webapp/package-lock.json
       - run: npm ci
-        working-directory: webapp
       - run: npm test
-        working-directory: webapp
         env:
           TEST_DATABASE_URL: postgres://wspomo:wspomo@127.0.0.1:5432/wspomo
 
@@ -49,7 +46,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: build image
-        run: docker build -t wspomo:ci webapp
+        run: docker build -t wspomo:ci .
       - name: sanity — server boots and /api/state answers (file-backed)
         run: |
           docker run -d --name wspomo-sanity -p 3000:3000 wspomo:ci
