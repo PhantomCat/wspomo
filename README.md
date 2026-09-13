@@ -5,15 +5,16 @@
 <h1 align="center">Workday Synced Pomodoro Timer</h1>
 
 <p align="center">
-  <b>aka <a href="https://wspomo.xyz">wspomo</a></b> — a minimal Pomodoro timer anchored to your work schedule.<br>
-  Built with Node.js and a vanilla frontend.
+  <b>wspomo</b> — a Pomodoro timer anchored to your work schedule.<br>
+  Open it at 10:15 — it already knows which session you should be in.<br>
+  <a href="https://wspomo.work"><b>wspomo.work</b></a> — live, no install needed.
 </p>
 
 <p align="center">
-  <a href="https://wspomo.xyz"><picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/wspomo.xyz-live-a6e3a1?style=flat-square">
-    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/wspomo.xyz-live-40a02b?style=flat-square">
-    <img alt="wspomo.xyz — live" src="https://img.shields.io/badge/wspomo.xyz-live-a6e3a1?style=flat-square">
+  <a href="https://wspomo.work"><picture>
+    <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/wspomo.work-live-a6e3a1?style=flat-square">
+    <source media="(prefers-color-scheme: light)" srcset="https://img.shields.io/badge/wspomo.work-live-40a02b?style=flat-square">
+    <img alt="wspomo.work — live" src="https://img.shields.io/badge/wspomo.work-live-a6e3a1?style=flat-square">
   </picture></a>
   <a href="LICENSE"><picture>
     <source media="(prefers-color-scheme: dark)" srcset="https://img.shields.io/badge/license-GPL--3.0-89b4fa?style=flat-square">
@@ -41,35 +42,49 @@
 
 Most Pomodoro timers simply count down from the moment you press "Start". wspomo anchors the entire interval chain to your work schedule: it calculates which session you *should* be in right now, so breaks and focus blocks follow the actual clock. Open it at 10:15 with a 09:00 workday start — it picks up mid-session and shows the remaining time. No drifting breaks, no misaligned cycles.
 
+That makes it a work-synchronized pomodoro timer: focus sessions, breaks, and lunch are derived from your real workday (start, lunch, end) rather than a free-running countdown — which is exactly what remote workers and office employees with a fixed or semi-fixed schedule actually need.
+
 ## Features
 
 - **Workday synchronization** — anchor the Pomodoro chain to your schedule (start, lunch, end times)
 - **Three modes:** Focus, short break, long break
 - **Customizable durations** for each mode
 - **Auto-advance** — intervals transition automatically (work → short break → work → … → long break)
+- **Timezone-aware** — schedules are computed in your timezone (auto-detected from the browser), not the server's
+- **Headless-friendly API** — `GET /api/state` returns the current session for external clients (system bars, scripts, TUIs)
 - **Sound notifications** with test button and mute toggle
 - **Browser notifications** with permission prompt
 - **i18n** — Russian and English, auto-detected from browser language
 - **Settings persistence** via browser cookies
+- **Anonymous usage counters** — daily aggregates in Postgres, never raw events
 - **Catppuccin Mocha** dark theme
 
 ## Quick Start
 
-**Live:** [wspomo.xyz](https://wspomo.xyz) — no install needed.
-
-**Self-host with Docker:**
+### Run with Docker (pull — no build needed)
 
 ```bash
+docker pull ghcr.io/phantomcat/wspomo:latest
+cp .env.example .env   # then set IMAGE=ghcr.io/phantomcat/wspomo:latest
 docker compose up -d
 ```
 
-Open `http://localhost:3000`
+Open <http://localhost:3000> — traffic flows through the bundled caddy proxy.
 
-**Run manually:**
+### Build from source
+
+```bash
+docker build -t wspomo:local .
+cp .env.example .env   # IMAGE=wspomo:local is the default
+docker compose up -d
+```
+
+### Development without Docker
 
 ```bash
 npm install
-npm start
+npm start        # http://localhost:3000 (node serves directly, no caddy)
+npm test         # 94 tests, node:test runner
 ```
 
 ## Configuration
@@ -93,32 +108,68 @@ All settings are saved in browser cookies and persist between sessions.
 | Sound | On | Play notification sounds |
 | Browser notifications | On | Show desktop notifications |
 | Language | Auto (browser) | ru / en |
+| Timezone | Auto (browser) | Used to anchor the schedule; override for travel |
+
+## API
+
+For headless clients (system bars, scripts, small integrations):
+
+```bash
+curl http://localhost:3000/api/state
+# { synced, state, mode, session, remainingSec, totalSec, lunch, serverTime }
+```
+
+- `state` is `work` / `break` / `before-work` / `after-work` / `out-of-scope`; `mode` carries
+  `work` / `shortBreak` / `longBreak` / `lunch` while a chain is running
+- optional `?tz=Europe/Berlin` computes the schedule in that timezone (default: server-local)
+- `Authorization: Bearer <token>` is reserved for per-user settings (auth milestone)
+
+Also available: `GET/POST /api/settings` (browser cookies), `POST /api/track/visit`,
+`POST /api/track/heartbeat`, `GET /api/metrics/public` (aggregated counters). See
+[public/PRIVACY.md](public/PRIVACY.md) for what is stored — anonymized counts only.
+
+## Architecture
+
+- **`timer-core.js`** — pure timer logic with no DOM; shared by the web UI, the test suite, and the server's state replay, so all clients agree on the same schedule math
+- **Server** — Express; computes the current session by replaying the schedule (`/api/state`), collects anonymous daily counters
+- **Storage** — Postgres (schema in `db/schema.sql`, thin layer in `lib/storage.js`, no ORM) with daily aggregate metrics; falls back to a JSON file when `DATABASE_URL` is unset
+- **One compose** for every environment — dev vs prod differ only via `.env` (image name, caddy ports, Postgres password); caddy proxies requests to the timer container in both cases
 
 ## Project Structure
 
 ```
 wspomo/
-├── caddy/
-│   └── Caddyfile
+├── .env.example            # environment template (copy to .env)
+├── .github/workflows/ci.yml
 ├── Dockerfile
+├── caddy/
+│   ├── Caddyfile.example   # copy as Caddyfile (real one is gitignored)
+│   └── Caddyfile           # your local copy (gitignored)
+├── db/schema.sql
+├── lib/
+│   ├── metrics.js          # JSON-file fallback store
+│   └── storage.js          # Postgres layer
+├── public/
+│   ├── PRIVACY.md
+│   ├── favicon.svg
+│   ├── index.html
+│   ├── js/timer-core.js
+│   └── style.css
+├── tests/                  # 94 tests (node:test)
 ├── docker-compose.yml
-├── .dockerignore
-├── .gitignore
-├── LICENSE
 ├── package.json
-├── server.js
-└── public/
-    ├── favicon.svg
-    ├── index.html
-    └── style.css
+└── server.js
 ```
 
-## Tech Stack
+## Self-Hosting Notes
 
-- **Backend:** Express.js, cookie-parser
-- **Frontend:** Vanilla HTML/CSS/JS, Web Audio API
-- **Theme:** Catppuccin Mocha
-- **Runtime:** Node.js 20 Alpine
+- Start from `.env.example`: set `IMAGE`, `POSTGRES_PASSWORD` (fill a strong value), and the caddy
+  port mapping (`CADDY_HTTP`/`CADDY_HTTPS`). Defaults match the dev layout (`3000:3000` through
+  caddy, no TLS); a typical VPS/production uses `CADDY_HTTP=80:80`, `CADDY_HTTPS=443:443` and real
+  domains in the Caddyfile.
+- The compose file runs the same way on both a laptop and a small VPS — same `docker compose up -d`.
+- On small VPS boxes (<1.5 GB RAM) add ~2 GB of swap before running Postgres alongside the app.
+- The CI pipeline builds and publishes `ghcr.io/phantomcat/wspomo:latest` on every push to `main`.
 
 ## License
 
