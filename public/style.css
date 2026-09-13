@@ -704,34 +704,45 @@ body {
 
 .footer {
   margin-top: auto;
-  padding: 1.5rem 0;
-  text-align: center;
+  padding: 1.5rem 2rem;
 }
 
-/* single centered row: counters and links on one line */
+/* full-width row: links centered, metrics pinned to the right */
+.footer-inner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: relative;
+  min-height: 2.5rem;
+}
+
 .footer-links {
   display: inline-flex;
   gap: 0.75rem;
   flex-wrap: wrap;
   justify-content: center;
-  align-items: center;
 }
 
 .footer-metrics {
-  display: inline-flex;
-  align-items: center;
+  position: absolute;
+  right: 0;
   font-size: 0.8125rem;
   color: var(--ctp-overlay0);
   min-height: 1.2em;
-  text-align: left;
+  text-align: right;
+  white-space: nowrap;
 }
 
-/* narrow screens: stack — metrics above the links, still centered */
+/* narrow screens: stack — links centered, metrics under them centered */
 @media (max-width: 768px) {
+  .footer { padding: 1.5rem 1rem; }
+  .footer-inner {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75rem;
+  }
   .footer-metrics {
-    display: block;
-    width: 100%;
-    margin: 0 0 0.75rem;
+    position: static;
     text-align: center;
   }
 }
