@@ -9,6 +9,10 @@ data/
 logo/
 *.tar.gz
 
+# environment-specific runtime files (use .env.example / Caddyfile.example)
+caddy/Caddyfile
+caddy/data/
+caddy/config/
+
 # local artifacts
-*.tar.gz
 waybar-plugin/

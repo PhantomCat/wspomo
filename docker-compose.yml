@@ -4,22 +4,22 @@ services:
     image: caddy:2
     container_name: caddy
     ports:
-      - 80:80
-      - 443:443
+      - "${CADDY_HTTP:-3000:3000}"   # dev: 3000:3000 (http://localhost:3000); prod: 80:80
+      - "${CADDY_HTTPS:-3001:443}"   # prod: 443:443; dev: dormant high port
     restart: unless-stopped
     volumes:
-      - ${PWD}/caddy/Caddyfile:/etc/caddy/Caddyfile
-      - ${PWD}/caddy/data:/data
-      - ${PWD}/caddy/config:/config
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ./caddy/data:/data
+      - ./caddy/config:/config
       - /etc/localtime:/etc/localtime:ro
 
-
   wspomo:
-    build: .
+    image: ${IMAGE:-wspomo:local}    # dev: image built by hand (docker build -t wspomo:local .)
+                                     # prod: ghcr.io/phantomcat/wspomo:latest (from .env)
+                                     # compose never builds — image is built or pulled separately
     container_name: wspomo
-    image: wspomo:latest
-    ports:
-      - 3000:3000
+    expose:
+      - 3000
     restart: unless-stopped
     depends_on:
       postgres:

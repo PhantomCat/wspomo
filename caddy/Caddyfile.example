@@ -1,0 +1,18 @@
+# wspomo Caddyfile example — copy this file as `Caddyfile` next to it and
+# adapt per environment. The real Caddyfile is gitignored (like .env):
+# each environment has its own domains/ports.
+
+# ---------- dev (docker compose, default) ----------
+# No TLS: caddy takes the traffic on :3000 and proxies to the container.
+:3000 {
+    reverse_proxy wspomo:3000
+}
+
+# ---------- prod blocks (commented; use them on the server) ----------
+# wspomo.xyz {
+#     reverse_proxy wspomo:3000
+# }
+#
+# wspomo.work {
+#     reverse_proxy wspomo:3000
+# }
