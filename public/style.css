@@ -271,11 +271,18 @@ body {
   opacity: 0.8;
 }
 
+.header-actions {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  display: flex;
+  gap: 0.75rem;
+  z-index: 50;
+}
+
 .settings-toggle,
 .sync-toggle,
 .theme-toggle {
-  position: fixed;
-  top: 1rem;
   background: var(--ctp-surface0);
   border: none;
   color: var(--ctp-text);
@@ -287,22 +294,15 @@ body {
   align-items: center;
   justify-content: center;
   transition: background 0.2s;
-  z-index: 50;
 }
 
 .settings-toggle:hover,
 .sync-toggle:hover,
 .theme-toggle:hover { background: var(--ctp-surface1); }
 
-.settings-toggle {
-  right: 1rem;
-  font-size: 1.25rem;
-}
+.settings-toggle { font-size: 1.25rem; }
 
-.theme-toggle {
-  right: 4rem;
-  font-size: 1.25rem;
-}
+.theme-toggle { font-size: 1.25rem; }
 
 .theme-toggle svg {
   width: 20px;
@@ -310,7 +310,6 @@ body {
 }
 
 .sync-toggle {
-  right: 7rem;
   font-size: 1rem;
   font-weight: 700;
 }
@@ -696,34 +695,34 @@ body {
 .footer {
   margin-top: auto;
   padding: 1.5rem 0;
-  text-align: center; /* centers inline-flex links on all widths */
+  text-align: center;
 }
 
+/* single centered row: counters and links on one line */
 .footer-links {
   display: inline-flex;
   gap: 0.75rem;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
 }
-/* fixed to the bottom-left of the screen, mirroring .site-header (top-left) */
+
 .footer-metrics {
-  position: fixed;
-  bottom: 1rem;
-  left: 1.25rem;
+  display: inline-flex;
+  align-items: center;
   font-size: 0.8125rem;
   color: var(--ctp-overlay0);
   min-height: 1.2em;
   text-align: left;
-  z-index: 10;
 }
 
-/* narrow screens: back into flow, above the footer links, spaced apart */
+/* narrow screens: stack — metrics above the links, still centered */
 @media (max-width: 768px) {
   .footer-metrics {
-    position: static;
     display: block;
+    width: 100%;
+    margin: 0 0 0.75rem;
     text-align: center;
-    margin: 0.5rem 0.5rem 1.25rem;
   }
 }
 
@@ -732,6 +731,4 @@ body {
   .timer-circle { width: 240px; height: 240px; }
   .timer-time { font-size: 3rem; }
   .settings-panel { width: 100vw; }
-  .theme-toggle { right: 4rem; }
-  .sync-toggle { right: 7rem; }
 }

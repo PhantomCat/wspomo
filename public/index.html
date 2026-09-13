@@ -30,12 +30,14 @@
     <span class="site-tagline">workday synced pomodoro timer</span>
     <span class="site-name">:wspomo</span>
   </header>
-  <button class="sync-toggle" id="syncToggle" title="Синхронизация с рабочим днём">W</button>
-  <button class="theme-toggle" id="themeToggle" title="Тема">
-    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-    <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.4 5.4 0 0 1-4.4 4.26 7 7 0 0 1-4.5-12.9z"/></svg>
-  </button>
-  <button class="settings-toggle" id="settingsToggle" aria-label="Настройки">&#9881;</button>
+  <div class="header-actions">
+    <button class="sync-toggle" id="syncToggle" title="Синхронизация с рабочим днём">W</button>
+    <button class="theme-toggle" id="themeToggle" title="Тема">
+      <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      <svg class="icon-moon" viewBox="0 0 24 24" fill="currentColor" style="display:none"><path d="M12 3a9 9 0 1 0 9 9c0-.46-.04-.92-.1-1.36a5.4 5.4 0 0 1-4.4 4.26 7 7 0 0 1-4.5-12.9z"/></svg>
+    </button>
+    <button class="settings-toggle" id="settingsToggle" aria-label="Настройки">&#9881;</button>
+  </div>
 
   <div class="settings-overlay" id="settingsOverlay"></div>
 
@@ -138,7 +140,7 @@
             <span class="toggle-slider"></span>
           </label>
         </div>
-        <button class="btn-test-sound" id="testSoundBtn" data-i18n="testSound">&#128264; Проверить звук</button>
+        <button class="btn-test-sound" id="testSoundBtn"><svg class="icon-bell" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg><span data-i18n="testSound">Проверить звук</span></button>
       </div>
     </div>
 
@@ -222,7 +224,7 @@
         howItWorksText: 'Таймер привязывается к началу часа. Если включено в 09:15 — цепочка начнётся с 09:00, а таймер покажет оставшееся время текущей сессии. Обед пропускается в расчётах.',
         sound: 'Звук',
         browserNotif: 'Браузерные уведомления',
-        testSound: '🔔 Проверить звук',
+        testSound: 'Проверить звук',
         save: 'Сохранить',
         start: 'Старт',
         pause: 'Пауза',
@@ -267,7 +269,7 @@
         howItWorksText: 'Timer is anchored to the hour start. If enabled at 09:15 — the chain starts from 09:00, and the timer shows remaining time of the current session. Lunch is skipped in calculations.',
         sound: 'Sound',
         browserNotif: 'Browser notifications',
-        testSound: '🔔 Test sound',
+        testSound: 'Test sound',
         save: 'Save',
         start: 'Start',
         pause: 'Pause',
