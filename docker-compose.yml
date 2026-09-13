@@ -29,7 +29,9 @@ services:
       - PORT=3000
       - DATABASE_URL=postgres://wspomo:${POSTGRES_PASSWORD:-wspomo}@postgres:5432/wspomo
     healthcheck:
-      test: ["CMD", "wget", "--spider", "-q", "http://localhost:3000"]
+      test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
+      # 127.0.0.1, not localhost: in the container localhost resolves to ::1,
+      # while the server listens on IPv4 only → perpetual unhealthy
       interval: 30s
       timeout: 5s
       retries: 3
