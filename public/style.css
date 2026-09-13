@@ -705,6 +705,9 @@ body {
 .footer {
   margin-top: auto;
   padding: 1.5rem 2rem;
+  /* body is a centered flex column → children shrink-wrap; stretch to full
+     width, otherwise "right: 0" lands on the content edge, over the links */
+  align-self: stretch;
 }
 
 /* full-width row: links centered, metrics pinned to the right */
