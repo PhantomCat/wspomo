@@ -604,6 +604,10 @@ body {
 }
 
 .btn-test-sound {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
   width: 100%;
   padding: 0.5rem;
   background: var(--ctp-surface1);
@@ -617,6 +621,12 @@ body {
 }
 
 .btn-test-sound:hover { background: var(--ctp-surface2); }
+
+.btn-test-sound .icon-bell {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
 
 .lang-selector {
   display: flex;
