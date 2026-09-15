@@ -718,7 +718,7 @@
             state.running = false;
             updateStartButton();
             updateDisplay();
-            sendActiveReport(); // stopped → clear report, waybar back to replay
+            sendActiveReport(); // stopped → clear report, waybar back to idle
             return;
           }
         }
@@ -880,7 +880,7 @@
         updateStartButton();
         updateTitle();
         $('startBtn').classList.add('paused');
-        sendActiveReport(); // paused → report cleared, waybar back to schedule
+        sendActiveReport(); // paused → report cleared, waybar back to idle
         return;
       }
 

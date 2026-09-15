@@ -119,9 +119,10 @@ curl http://localhost:3000/api/state
 # { synced, state, mode, session, remainingSec, totalSec, lunch, serverTime }
 ```
 
-- `state` — `work` / `break` / `before-work` / `after-work` / `out-of-scope`; `mode` несёт
-  `work` / `shortBreak` / `longBreak` / `lunch`, пока идёт цепочка
-- опциональный `?tz=Europe/Berlin` считает расписание в этой зоне (по умолчанию — серверная)
+- `state` — `work` / `break`, пока клиент (браузер, мост TUI) сообщает о запущенном таймере,
+  либо `idle`, если ничего не идёт — OSS-сервер сам расписание не проигрывает, поэтому
+  headless-клиенты не видят фантомного таймера
+- `mode` несёт `work` / `shortBreak` / `longBreak` / `lunch`, пока идёт цепочка
 - `Authorization: Bearer <token>` зарезервирован под per-user настройки (веха auth)
 
 Также доступны: `GET/POST /api/settings` (cookies браузера), `POST /api/track/visit`,
@@ -130,8 +131,8 @@ curl http://localhost:3000/api/state
 
 ## Архитектура
 
-- **`timer-core.js`** — чистая логика таймера без DOM; используется веб-UI, тестами и серверным replay состояния — все клиенты считают одинаковую математику расписания
-- **Сервер** — Express; вычисляет текущую сессию replay'ем расписания (`/api/state`), собирает анонимные дневные счётчики
+- **`timer-core.js`** — чистая логика таймера без DOM; используется веб-UI, тестами и TUI-клиентом — все клиенты считают одинаковую математику расписания
+- **Сервер** — Express; ретранслирует состояние запущенного таймера, сообщаемое клиентами (`/api/state`), собирает анонимные дневные счётчики
 - **Хранилище** — Postgres (схема в `db/schema.sql`, тонкий слой в `lib/storage.js`, без ORM) с дневными агрегатами метрик; фолбэк на JSON-файл, если `DATABASE_URL` не установлен
 - **Один compose на все окружения** — dev и prod различаются только через `.env` (имя образа, порты caddy, пароль Postgres); caddy проксирует трафик в контейнер таймера в обоих случаях
 

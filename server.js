@@ -22,7 +22,6 @@ const path = require('path');
 const crypto = require('crypto');
 const { createMetrics } = require('./lib/metrics.js');
 const { createStorage } = require('./lib/storage.js');
-const timerCore = require('./public/js/timer-core.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -161,9 +160,10 @@ app.post('/api/track/visit', async (req, res) => {
 
 // ---------- active-report: browser relays its running timer state ----------
 // KT-1: free-form lives in the browser; the server only re-broadcasts what a
-// client reports. TTL ~90s: browser closed → report expires → /api/state
-// falls back to schedule replay. Until auth (11.10) the report is global
-// (standalone is single-user); with API tokens this becomes per-user.
+// client reports. TTL ~90s: no fresh report → /api/state answers idle.
+// OSS standalone has no server-side timer (issue #2, decision 15.09) —
+// nothing ticks without a running client. Until auth (26.09) the report is
+// global (standalone is single-user); with API tokens this becomes per-user.
 
 const ACTIVE_TTL_MS = 90 * 1000;
 const activeReports = new Map(); // uuid → { report, seenMs }
@@ -254,134 +254,46 @@ app.get('/api/metrics/public', async (req, res) => {
 });
 
 // ---------- GET /api/state (headless clients: waybar, TUI, ...) ----------
-// Replay-computed timer state from the workday schedule (KT-1 decision 09.09).
-// Auth seam: API tokens arrive as Bearer headers (implemented 11.10); for now
-// every caller shares the standalone (single-user) settings — the shape below
-// is already token-aware so headless clients never change their integration.
-
-function stateFromSynced(core, now) {
-  return {
-    synced: true,
-    state: core.type === 'work' ? 'work' : 'break',
-    mode: core.mode,
-    session: core.session,
-    remainingSec: core.timeLeft,
-    totalSec: core.totalTime,
-    lunch: false,
-    serverTime: now.toISOString()
-  };
-}
-
-function emptyState(now) {
-  return {
-    synced: true,
-    state: 'idle',
-    mode: null,
-    session: null,
-    remainingSec: null,
-    totalSec: null,
-    lunch: false,
-    serverTime: now.toISOString()
-  };
-}
-
-function computeState(settings, now) {
-  const core = timerCore.calculateSyncedTimeCore(settings, now);
-
-  if (core === null) {
-    // weekend or continueAfterWorkday past end — no timer chain running
-    return { ...emptyState(now), synced: false, state: 'out-of-scope' };
-  }
-
-  if (core.type === 'work' || core.type === 'break') {
-    return stateFromSynced(core, now);
-  }
-  if (core.type === 'lunch') {
-    const lunchState = stateFromSynced(
-      { type: 'break', mode: 'lunch', session: null, timeLeft: core.timeLeft, totalTime: core.totalTime },
-      now
-    );
-    lunchState.mode = 'lunch';
-    lunchState.lunch = true;
-    return lunchState;
-  }
-  if (core.type === 'before-work') {
-    const state = emptyState(now);
-    state.state = 'before-work';
-    state.remainingSec = core.timeLeft;
-    return state;
-  }
-  // core.type === 'after-work' — the only remaining contract value
-  const state = emptyState(now);
-  state.state = 'after-work';
-  return state;
-}
+// Relay-only contract (issue #2, decision 15.09): state comes exclusively from
+// a fresh client active-report; nothing runs server-side in OSS standalone.
+// Auth seam: API tokens arrive as Bearer headers (implemented 26.09); for now
+// every caller shares the single-user report — the shape below is already
+// token-aware so headless clients never change their integration.
 
 function readBearerToken(req) {
   const header = req.headers.authorization || '';
   return header.startsWith('Bearer ') ? header.slice(7) : null;
 }
 
-// Current time inside a named IANA timezone, as a Date whose local getters
-// (getHours/getDay/...) yield the target zone's wall time. Null if unknown.
-// (KT-1/11.09: schedules are computed in the user's timezone, not the host's.)
-function nowInTz(tzName) {
-  if (!tzName) return new Date();
-  try {
-    const parts = {};
-    for (const p of new Intl.DateTimeFormat('en-US', {
-      timeZone: tzName,
-      hourCycle: 'h23',
-      weekday: 'short',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    }).formatToParts(new Date())) {
-      if (p.type !== 'literal') parts[p.type] = p.value;
-    }
-    const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
-    if (dayIdx < 0) return null;
-    // local-component constructor: getDay/getHours then match the target zone
-    return new Date(
-      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
-      Number(parts.hour), Number(parts.minute), Number(parts.second), 0
-    );
-  } catch (e) {
-    return null; // unknown IANA zone
-  }
-}
-
-function isValidTimezone(tzName) {
-  return Boolean(tzName) && nowInTz(tzName) !== null;
+function emptyState(now) {
+  return {
+    synced: false,
+    state: 'idle',
+    mode: null,
+    session: null,
+    remainingSec: null,
+    totalSec: null,
+    lunch: false,
+    source: 'server',
+    serverTime: now.toISOString()
+  };
 }
 
 app.get('/api/state', (req, res) => {
-  // auth seam (KT-1): per-user settings + server-authoritative chain lookup
-  // arrive with API tokens (11.10); standalone callers run on defaults today.
-  const token = readBearerToken(req);
-
   // Priority: fresh client active-report (browser relays free-form AND synced
-  // runs) → schedule replay. Free-form is never computed by the server (KT-1).
+  // runs). No fresh report → idle: OSS standalone never replays a schedule
+  // server-side, so waybar never shows a phantom timer when nothing runs.
   const active = latestActiveReport();
   if (active) {
+    const token = readBearerToken(req);
     if (token) active.auth = 'recognized';
     return res.json(active);
   }
 
-  // State is always computed in workday-sync mode (KT-1: server-authoritative
-  // only for schedule chains); everything else comes from shared defaults.
-  const settings = { ...getDefaultSettings(), workdaySync: true };
-  const now = nowInTz(req.query.tz);
-  if (now === null) {
-    return res.status(400).json({ ok: false, error: 'invalid_timezone' });
-  }
-  const state = computeState(settings, now);
-
+  const state = emptyState(new Date());
+  const token = readBearerToken(req);
   if (token) {
-    state.auth = 'recognized'; // placeholder until token store (11.10)
+    state.auth = 'recognized'; // placeholder until token store (26.09)
   }
   res.json(state);
 });
@@ -409,7 +321,7 @@ function getDefaultSettings() {
     browserNotification: true,
     language: null,
     theme: 'mocha',
-    timezone: null // browser fills via Intl on first save; used by /api/state?tz
+    timezone: null // browser fills via Intl on first save
   };
 }
 
@@ -429,4 +341,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, getDefaultSettings, metrics, computeState, storage, nowInTz };
+module.exports = { app, getDefaultSettings, metrics, storage };

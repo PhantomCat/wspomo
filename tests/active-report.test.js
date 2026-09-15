@@ -56,7 +56,7 @@ async function getState(cookie) {
 
 // Reports are global pre-auth (single-user semantics, KT-1) — tests share the
 // server's activeReports map, so each test clears reports from all previously
-// created visitors before asserting on replay fallback.
+// created visitors before asserting on the idle fallback.
 const visitorCookies = [];
 
 async function clearAllReports() {
@@ -76,20 +76,22 @@ test('heartbeat without visitor cookie → 400', async () => {
   assert.strictEqual(res.status, 400);
 });
 
-test('invalid active report (unknown mode) is ignored — replay stays in charge', async () => {
+test('invalid active report (unknown mode) is ignored — state stays idle', async () => {
   await clearAllReports();
   const cookie = await newVisitor();
   await reportActive(cookie, { mode: 'party', remainingSec: 60, totalSec: 1500 });
   const state = await getState(cookie);
-  assert.notStrictEqual(state.source, 'client');
+  assert.strictEqual(state.state, 'idle');
+  assert.strictEqual(state.source, 'server');
 });
 
-test('invalid active report (bad remainingSec) is ignored', async () => {
+test('invalid active report (bad remainingSec) is ignored — state stays idle', async () => {
   await clearAllReports();
   const cookie = await newVisitor();
   await reportActive(cookie, { mode: 'work', remainingSec: -5, totalSec: 1500 });
   const state = await getState(cookie);
-  assert.notStrictEqual(state.source, 'client');
+  assert.strictEqual(state.state, 'idle');
+  assert.strictEqual(state.source, 'server');
 });
 
 // ---------- happy path ----------
@@ -136,7 +138,7 @@ test('active report lunch → state=break, mode=lunch, lunch=true', async () => 
   assert.strictEqual(state.lunch, true);
 });
 
-test('active: null clears the report → replay takes over', async () => {
+test('active: null clears the report → idle (no replay fallback)', async () => {
   await clearAllReports();
   const cookie = await newVisitor();
   await reportActive(cookie, { mode: 'work', remainingSec: 960, totalSec: 1500, session: 1 });
@@ -145,7 +147,8 @@ test('active: null clears the report → replay takes over', async () => {
 
   await reportActive(cookie, null); // browser signals idle
   state = await getState(cookie);
-  assert.notStrictEqual(state.source, 'client');
+  assert.strictEqual(state.state, 'idle');
+  assert.strictEqual(state.source, 'server');
 });
 
 test('Bearer token on active-report state keeps auth field', async () => {

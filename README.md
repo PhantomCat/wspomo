@@ -119,9 +119,10 @@ curl http://localhost:3000/api/state
 # { synced, state, mode, session, remainingSec, totalSec, lunch, serverTime }
 ```
 
-- `state` is `work` / `break` / `before-work` / `after-work` / `out-of-scope`; `mode` carries
-  `work` / `shortBreak` / `longBreak` / `lunch` while a chain is running
-- optional `?tz=Europe/Berlin` computes the schedule in that timezone (default: server-local)
+- `state` is `work` / `break` while a client (browser, TUI bridge) reports a running
+  timer, or `idle` when nothing runs — the OSS standalone server never replays a
+  schedule on its own, so headless clients never see a phantom timer
+- `mode` carries `work` / `shortBreak` / `longBreak` / `lunch` while a chain is running
 - `Authorization: Bearer <token>` is reserved for per-user settings (auth milestone)
 
 Also available: `GET/POST /api/settings` (browser cookies), `POST /api/track/visit`,
@@ -130,8 +131,8 @@ Also available: `GET/POST /api/settings` (browser cookies), `POST /api/track/vis
 
 ## Architecture
 
-- **`timer-core.js`** — pure timer logic with no DOM; shared by the web UI, the test suite, and the server's state replay, so all clients agree on the same schedule math
-- **Server** — Express; computes the current session by replaying the schedule (`/api/state`), collects anonymous daily counters
+- **`timer-core.js`** — pure timer logic with no DOM; shared by the web UI, the test suite, and the TUI client, so all clients agree on the same schedule math
+- **Server** — Express; relays the running timer state reported by clients (`/api/state`), collects anonymous daily counters
 - **Storage** — Postgres (schema in `db/schema.sql`, thin layer in `lib/storage.js`, no ORM) with daily aggregate metrics; falls back to a JSON file when `DATABASE_URL` is unset
 - **One compose** for every environment — dev vs prod differ only via `.env` (image name, caddy ports, Postgres password); caddy proxies requests to the timer container in both cases
 
