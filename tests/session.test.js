@@ -25,8 +25,18 @@ test.before(async () => {
   await new Promise((resolve) => server.once('listening', resolve));
   const { port } = server.address();
   base = `http://127.0.0.1:${port}`;
-  // guarantee schema is applied before any HTTP call (server init races)
-  await storage.init();
+  // The server already runs storage.init() (fail-fast on misconfig). Do NOT
+  // init again here: two concurrent CREATE TABLE IF NOT EXISTS against a
+  // fresh database race on the pg_type catalog (duplicate key) and killed CI.
+  // Wait until the schema is actually usable instead.
+  for (let i = 0; i < 50; i++) {
+    try {
+      await storage.pool.query('SELECT 1 FROM users LIMIT 1');
+      break;
+    } catch (e) {
+      await new Promise((r) => setTimeout(r, 100));
+    }
+  }
   // only this file's fixtures ('sess-%' users) — storage.test.js runs in
   // parallel on the same database and a global TRUNCATE there races with us
   await storage.pool.query("DELETE FROM users WHERE email LIKE 'sess-%'");
