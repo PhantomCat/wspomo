@@ -28,6 +28,15 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- Server-authoritative schedule chains (KT-1, 21.09): at most one active
+-- timer session per user; replay recomputes state from the schedule and
+-- started_at, the row only marks which chain the user activated.
+CREATE TABLE IF NOT EXISTS active_sessions (
+  user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  mode       TEXT NOT NULL CHECK (mode IN ('synced', 'freeform')),
+  started_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Daily aggregates: one row per day, updated in place.
 CREATE TABLE IF NOT EXISTS metrics_daily (
   day           DATE PRIMARY KEY,

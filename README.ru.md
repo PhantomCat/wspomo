@@ -120,19 +120,28 @@ curl http://localhost:3000/api/state
 ```
 
 - `state` — `work` / `break`, пока клиент (браузер, мост TUI) сообщает о запущенном таймере,
-  либо `idle`, если ничего не идёт — OSS-сервер сам расписание не проигрывает, поэтому
-  headless-клиенты не видят фантомного таймера
+  либо `idle`, если ничего не идёт — без валидного токена сервер сам расписание не
+  проигрывает, поэтому headless-клиенты не видят фантомного таймера
 - `mode` несёт `work` / `shortBreak` / `longBreak` / `lunch`, пока идёт цепочка
-- `Authorization: Bearer <token>` зарезервирован под per-user настройки (веха auth)
+- **Server-authoritative replay (для токенов)**: с валидным
+  `Authorization: Bearer <token>` сервер может вести расписание сам.
+  `POST /api/session {"action":"start","mode":"synced"}` активирует цепочку
+  пользователя, `{"action":"stop"}` деактивирует; после этого `GET /api/state`
+  отвечает проигранным расписанием (настройки + таймзона пользователя), когда
+  браузер молчит — waybar и TUI тикают с закрытым браузером. Free-form-цепочки
+  (`"mode":"freeform"`) остаются браузерными by design.
+- `Authorization: Bearer <token>` также переключает `GET/POST /api/settings`
+  на per-user хранение (Postgres) вместо cookies браузера
 
-Также доступны: `GET/POST /api/settings` (cookies браузера), `POST /api/track/visit`,
-`POST /api/track/heartbeat`, `GET /api/metrics/public` (агрегированные счётчики). Что хранится —
+Также доступны: `GET/POST /api/settings` (cookies браузера), `POST /api/session`
+(токен), `POST /api/track/visit`, `POST /api/track/heartbeat`,
+`GET /api/metrics/public` (агрегированные счётчики). Что хранится —
 только анонимные счётчики — см. [public/PRIVACY.md](public/PRIVACY.md).
 
 ## Архитектура
 
 - **`timer-core.js`** — чистая логика таймера без DOM; используется веб-UI, тестами и TUI-клиентом — все клиенты считают одинаковую математику расписания
-- **Сервер** — Express; ретранслирует состояние запущенного таймера, сообщаемое клиентами (`/api/state`), собирает анонимные дневные счётчики
+- **Сервер** — Express; ретранслирует состояние запущенного таймера (`/api/state`) и для держателей токенов проигрывает расписание на сервере (`POST /api/session`); собирает анонимные дневные счётчики
 - **Хранилище** — Postgres (схема в `db/schema.sql`, тонкий слой в `lib/storage.js`, без ORM) с дневными агрегатами метрик; фолбэк на JSON-файл, если `DATABASE_URL` не установлен
 - **Один compose на все окружения** — dev и prod различаются только через `.env` (имя образа, порты caddy, пароль Postgres); caddy проксирует трафик в контейнер таймера в обоих случаях
 

@@ -21,8 +21,11 @@ if (hasDb) {
   test.before(async () => {
     storage = createStorage({ databaseUrl: DATABASE_URL });
     await storage.init();
-    // fresh slate: tests assert exact aggregate values
-    await storage.pool.query('TRUNCATE metrics_visitors, metrics_daily, sessions, settings, users');
+    // fresh slate for exact aggregate assertions. Only this file's own
+    // fixtures are cleaned — session.test.js runs in parallel against the
+    // same database and owns its 'sess-%' users (global TRUNCATE here races).
+    await storage.pool.query('TRUNCATE metrics_visitors, metrics_daily');
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'st-%'");
   });
   test.after(async () => {
     await storage.close();

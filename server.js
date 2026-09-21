@@ -22,6 +22,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { createMetrics } = require('./lib/metrics.js');
 const { createStorage } = require('./lib/storage.js');
+const timerCore = require('./public/js/timer-core.js');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -87,7 +88,19 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-app.get('/api/settings', (req, res) => {
+// ---------- GET /api/settings ----------
+// Auth branch (KT-1, 21.09): a valid Bearer token reads/writes the per-user
+// DB settings row. Cookies keep the standalone single-user path (pre-auth).
+app.get('/api/settings', async (req, res) => {
+  const token = readBearerToken(req);
+  if (token && metricsDb) {
+    const session = await storage.findSessionByToken(token);
+    if (session) {
+      const data = await storage.getSettings(session.user_id);
+      return res.json({ ...getDefaultSettings(), ...(data || {}) });
+    }
+  }
+
   const main = parseCookie(req.cookies.wspomo_main);
   const lang = req.cookies.wspomo_lang;
   const days = parseCookie(req.cookies.wspomo_days);
@@ -110,8 +123,19 @@ app.get('/api/settings', (req, res) => {
   });
 });
 
-app.post('/api/settings', (req, res) => {
-  const { language, workDays, theme, ...main } = req.body;
+app.post('/api/settings', async (req, res) => {
+  const { language, workDays, theme, ...main } = req.body || {};
+
+  // Auth branch: valid token → upsert full body into the user's DB row
+  // (full replace, matching storage.setSettings semantics).
+  const token = readBearerToken(req);
+  if (token && metricsDb) {
+    const session = await storage.findSessionByToken(token);
+    if (session) {
+      await storage.setSettings(session.user_id, req.body || {});
+      return res.json({ ok: true, stored: 'db' });
+    }
+  }
 
   res.cookie('wspomo_main', JSON.stringify(main), COOKIE_OPTS);
 
@@ -279,19 +303,160 @@ function emptyState(now) {
   };
 }
 
-app.get('/api/state', (req, res) => {
-  // Priority: fresh client active-report (browser relays free-form AND synced
-  // runs). No fresh report → idle: OSS standalone never replays a schedule
-  // server-side, so waybar never shows a phantom timer when nothing runs.
+// ---------- server-authoritative replay (KT-1, task 21.09) ----------
+// Replay = pure schedule calculation (timer-core) anchored to the workday
+// grid; the active_sessions row only marks WHICH chain the user activated.
+// Auth-gated: valid Bearer → per-user session row + settings; no token →
+// relay-only (issue #2 holds for OSS standalone).
+
+function stateFromSynced(core, now) {
+  return {
+    synced: true,
+    state: core.type === 'work' ? 'work' : 'break',
+    mode: core.mode,
+    session: core.session,
+    remainingSec: core.timeLeft,
+    totalSec: core.totalTime,
+    lunch: false,
+    source: 'server',
+    serverTime: now.toISOString()
+  };
+}
+
+function computeState(settings, now) {
+  const core = timerCore.calculateSyncedTimeCore(settings, now);
+
+  if (core === null) {
+    // weekend or continueAfterWorkday past end — no timer chain running
+    return { ...emptyState(now), synced: false, state: 'out-of-scope' };
+  }
+
+  if (core.type === 'work' || core.type === 'break') {
+    return stateFromSynced(core, now);
+  }
+  if (core.type === 'lunch') {
+    const lunchState = stateFromSynced(
+      { type: 'break', mode: 'lunch', session: null, timeLeft: core.timeLeft, totalTime: core.totalTime },
+      now
+    );
+    lunchState.mode = 'lunch';
+    lunchState.lunch = true;
+    return lunchState;
+  }
+  if (core.type === 'before-work') {
+    const state = emptyState(now);
+    state.state = 'before-work';
+    state.remainingSec = core.timeLeft;
+    return state;
+  }
+  // core.type === 'after-work' — the only remaining contract value
+  const state = emptyState(now);
+  state.state = 'after-work';
+  return state;
+}
+
+// Current time inside a named IANA timezone, as a Date whose local getters
+// (getHours/getDay/...) yield the target zone's wall time. Null if unknown.
+// (KT-1/11.09: schedules are computed in the user's timezone, not the host's.)
+function nowInTz(tzName) {
+  if (!tzName) return new Date();
+  try {
+    const parts = {};
+    for (const p of new Intl.DateTimeFormat('en-US', {
+      timeZone: tzName,
+      hourCycle: 'h23',
+      weekday: 'short',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit'
+    }).formatToParts(new Date())) {
+      if (p.type !== 'literal') parts[p.type] = p.value;
+    }
+    const dayIdx = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+    if (dayIdx < 0) return null;
+    // local-component constructor: getDay/getHours then match the target zone
+    return new Date(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour), Number(parts.minute), Number(parts.second), 0
+    );
+  } catch (e) {
+    return null; // unknown IANA zone
+  }
+}
+
+function isValidTimezone(tzName) {
+  return Boolean(tzName) && nowInTz(tzName) !== null;
+}
+
+// Resolve a Bearer token to a user row; null when no DB, no token or no match.
+async function authUser(req) {
+  const token = readBearerToken(req);
+  if (!token || !metricsDb) return null;
+  return storage.findSessionByToken(token);
+}
+
+// POST /api/session { action: 'start'|'stop', mode: 'synced'|'freeform' }
+// Marks the user's timer chain active/inactive in the DB. Replay in
+// GET /api/state then serves headless clients (waybar/TUI) without a browser.
+app.post('/api/session', async (req, res) => {
+  const user = await authUser(req);
+  if (!user) {
+    return res.status(401).json({ ok: false, error: 'unauthorized' });
+  }
+  const action = req.body && req.body.action;
+  if (action === 'start') {
+    const mode = req.body.mode === 'freeform' ? 'freeform' : 'synced';
+    await storage.startActiveSession(user.user_id, mode);
+    return res.json({ ok: true, active: true, mode });
+  }
+  if (action === 'stop') {
+    const stopped = await storage.stopActiveSession(user.user_id);
+    return res.json({ ok: true, active: false, stopped });
+  }
+  return res.status(400).json({ ok: false, error: 'invalid_action' });
+});
+
+app.get('/api/state', async (req, res) => {
+  // Priority 1: fresh client active-report (browser relays free-form AND
+  // synced runs) — always wins, zero latency, matches what the user sees.
   const active = latestActiveReport();
+  const token = readBearerToken(req);
+
   if (active) {
-    const token = readBearerToken(req);
     if (token) active.auth = 'recognized';
     return res.json(active);
   }
 
+  // Priority 2 (server-authoritative, KT-1): valid Bearer → the user's
+  // active session row + their settings → schedule replay. Without a token
+  // this stays idle: OSS standalone never replays a schedule (issue #2).
+  const user = await authUser(req);
+  if (user) {
+    const row = await storage.getActiveSession(user.user_id);
+    if (row && row.mode === 'synced') {
+      const settings = await storage.getSettings(user.user_id);
+      const merged = { ...getDefaultSettings(), ...(settings || {}), workdaySync: true };
+      const tz = isValidTimezone(merged.timezone) ? merged.timezone : null;
+      const now = nowInTz(tz);
+      if (now === null) {
+        return res.status(400).json({ ok: false, error: 'invalid_timezone' });
+      }
+      const state = computeState(merged, now);
+      state.auth = 'recognized';
+      return res.json(state);
+    }
+    if (row && row.mode === 'freeform') {
+      // free-form is never computed by the server (KT-1); mark recognized
+      const state = emptyState(new Date());
+      state.auth = 'recognized';
+      return res.json(state);
+    }
+  }
+
   const state = emptyState(new Date());
-  const token = readBearerToken(req);
   if (token) {
     state.auth = 'recognized'; // placeholder until token store (26.09)
   }
@@ -341,4 +506,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, getDefaultSettings, metrics, storage };
+module.exports = { app, getDefaultSettings, metrics, computeState, storage, nowInTz, isValidTimezone };

@@ -120,19 +120,28 @@ curl http://localhost:3000/api/state
 ```
 
 - `state` is `work` / `break` while a client (browser, TUI bridge) reports a running
-  timer, or `idle` when nothing runs — the OSS standalone server never replays a
-  schedule on its own, so headless clients never see a phantom timer
+  timer, or `idle` when nothing runs — without a valid token the server never
+  replays a schedule on its own, so headless clients never see a phantom timer
 - `mode` carries `work` / `shortBreak` / `longBreak` / `lunch` while a chain is running
-- `Authorization: Bearer <token>` is reserved for per-user settings (auth milestone)
+- **Server-authoritative replay (token holders)**: with a valid
+  `Authorization: Bearer <token>` the server can run the schedule itself.
+  `POST /api/session {"action":"start","mode":"synced"}` activates the user's
+  chain, `{"action":"stop"}` deactivates it; `GET /api/state` then answers the
+  replayed schedule (user settings + timezone) whenever no browser is
+  reporting — waybar and TUI keep ticking with the browser closed. Free-form
+  chains (`"mode":"freeform"`) stay browser-only by design.
+- `Authorization: Bearer <token>` also switches `GET/POST /api/settings` to
+  per-user storage (Postgres) instead of browser cookies
 
-Also available: `GET/POST /api/settings` (browser cookies), `POST /api/track/visit`,
-`POST /api/track/heartbeat`, `GET /api/metrics/public` (aggregated counters). See
+Also available: `GET/POST /api/settings` (browser cookies), `POST /api/session`
+(token), `POST /api/track/visit`, `POST /api/track/heartbeat`,
+`GET /api/metrics/public` (aggregated counters). See
 [public/PRIVACY.md](public/PRIVACY.md) for what is stored — anonymized counts only.
 
 ## Architecture
 
 - **`timer-core.js`** — pure timer logic with no DOM; shared by the web UI, the test suite, and the TUI client, so all clients agree on the same schedule math
-- **Server** — Express; relays the running timer state reported by clients (`/api/state`), collects anonymous daily counters
+- **Server** — Express; relays the running timer state reported by clients (`/api/state`) and, for token holders, replays the workday schedule server-side (`POST /api/session`); collects anonymous daily counters
 - **Storage** — Postgres (schema in `db/schema.sql`, thin layer in `lib/storage.js`, no ORM) with daily aggregate metrics; falls back to a JSON file when `DATABASE_URL` is unset
 - **One compose** for every environment — dev vs prod differ only via `.env` (image name, caddy ports, Postgres password); caddy proxies requests to the timer container in both cases
 
