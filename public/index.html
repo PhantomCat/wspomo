@@ -1562,6 +1562,30 @@
     function connectedProbe() {
       setConnectedStatus('', 'connectedChecking');
       startConnectedPoll(); // the 5s loop doubles as the retry path
+      startSettingsWatch(); // revision watch must survive fresh connections
+    }
+
+    // Cross-client settings sync (28.09): while connected, watch the revision
+    // in every engine, not only in the W-on poll loop — otherwise an edit on
+    // another client never reaches a free-form tab. Idempotent.
+    function startSettingsWatch() {
+      if (connected.settingsPollId) return;
+      connected.settingsPollId = setInterval(() => {
+        if (!isConnected()) return;
+        fetch(`${connectedCreds.url}/api/settings`, { headers: authHeaders() })
+          .then(res => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+          .then(data => {
+            if (typeof data.settingsRev !== 'string') return;
+            if (connected.settingsRev === null) { connected.settingsRev = data.settingsRev; return; }
+            if (data.settingsRev !== connected.settingsRev) {
+              connected.settingsRev = data.settingsRev;
+              const { settingsRev, ...rest } = data;
+              settings = { ...settings, ...rest };
+              applySettings();
+            }
+          })
+          .catch(() => { /* next round retries */ });
+      }, 60000);
     }
 
     function startConnectedPoll() {
@@ -1782,24 +1806,7 @@
       // cross-client settings sync (28.09): while connected, watch the
       // revision in every engine, not only in the W-on poll loop — otherwise
       // an edit on another client never reaches a free-form tab
-      if (isConnected()) {
-        connected.settingsPollId = setInterval(() => {
-          if (!isConnected()) return;
-          fetch(`${connectedCreds.url}/api/settings`, { headers: authHeaders() })
-            .then(res => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
-            .then(data => {
-              if (typeof data.settingsRev !== 'string') return;
-              if (connected.settingsRev === null) { connected.settingsRev = data.settingsRev; return; }
-              if (data.settingsRev !== connected.settingsRev) {
-                connected.settingsRev = data.settingsRev;
-                const { settingsRev, ...rest } = data;
-                settings = { ...settings, ...rest };
-                applySettings();
-              }
-            })
-            .catch(() => { /* next round retries */ });
-        }, 60000);
-      }
+      if (isConnected()) startSettingsWatch();
     }
 
     loadSettings().then(() => {

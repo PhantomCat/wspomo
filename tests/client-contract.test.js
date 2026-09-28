@@ -148,8 +148,11 @@ test('connected: settings revision sync (server row is the source of truth)', ()
   assert.ok(html.includes('connected.settingsRev = data.settingsRev'), 'POST/load adopt the fresh revision');
   const refetch = html.slice(html.indexOf('async function refetchSettings'), html.indexOf('function initTracking'));
   assert.ok(refetch.includes('applySettings()'), 'refetched settings are applied');
-  // revision watch must live in initTracking too — free-form tabs never run
-  // the W-on poll loop, yet edits from other clients must reach them
+  // one shared watch, armed in BOTH entry points: page load with stored creds
+  // AND fresh connection mid-session (initTracking runs before creds exist)
+  assert.ok(html.includes('function startSettingsWatch'), 'shared watch factory');
   const init = html.slice(html.indexOf('function initTracking'), html.lastIndexOf('</script>'));
-  assert.ok(init.includes('settingsPollId') && init.includes('settingsRev'), '60s revision watch runs in every engine');
+  assert.ok(init.includes('startSettingsWatch()'), 'armed on page load');
+  const probe = html.slice(html.indexOf('function connectedProbe'), html.indexOf('function startSettingsWatch'));
+  assert.ok(probe.includes('startSettingsWatch()'), 'armed on fresh connection');
 });
