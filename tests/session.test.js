@@ -164,13 +164,78 @@ test('settings: Bearer GET/POST round-trip via DB', { skip: !hasDb }, async () =
     method: 'POST', headers: auth,
     body: JSON.stringify({ workdayStart: '08:30', workDuration: 50 })
   });
-  assert.deepStrictEqual(await res.json(), { ok: true, stored: 'db' });
+  const postResp = await res.json();
+  assert.strictEqual(postResp.ok, true);
+  assert.strictEqual(postResp.stored, 'db');
+  assert.match(postResp.settingsRev, /^[0-9a-f]{5}$/); // revision returned (28.09)
 
   res = await fetch(`${base}/api/settings`, { headers: auth });
   data = await res.json();
   assert.strictEqual(data.workdayStart, '08:30');
   assert.strictEqual(data.workDuration, 50);
   assert.strictEqual(data.shortBreakDuration, 5); // default merged back
+});
+
+// ---------- settings revision hash (28.09, multi-client sync) ----------
+
+test('settings: POST returns a 5-char revision, GET agrees', { skip: !hasDb }, async () => {
+  const u = await storage.pool.query("INSERT INTO users (email) VALUES ($1) RETURNING id", ['sess-6@example.com']);
+  await storage.createSession(u.rows[0].id, 'api', 'sess-token-6');
+  const auth = { 'content-type': 'application/json', authorization: 'Bearer sess-token-6' };
+
+  const post = await fetch(`${base}/api/settings`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ workDuration: 40 })
+  });
+  const { ok, stored, settingsRev } = await post.json();
+  assert.strictEqual(ok, true);
+  assert.strictEqual(stored, 'db');
+  assert.match(settingsRev, /^[0-9a-f]{5}$/);
+
+  const get = await fetch(`${base}/api/settings`, { headers: { authorization: 'Bearer sess-token-6' } });
+  const g = await get.json();
+  assert.strictEqual(g.settingsRev, settingsRev, 'GET returns the same revision');
+  assert.strictEqual(g.workDuration, 40);
+
+  // changing settings changes the revision
+  const post2 = await fetch(`${base}/api/settings`, {
+    method: 'POST',
+    headers: auth,
+    body: JSON.stringify({ workDuration: 55 })
+  });
+  const d2 = await post2.json();
+  assert.notStrictEqual(d2.settingsRev, settingsRev);
+});
+
+test('state: replay carries settingsRev; revision changes with settings', { skip: !hasDb }, async () => {
+  const u = await storage.pool.query("INSERT INTO users (email) VALUES ($1) RETURNING id", ['sess-7@example.com']);
+  const uid = u.rows[0].id;
+  await storage.createSession(uid, 'api', 'sess-token-7');
+  await storage.startActiveSession(uid, 'synced');
+  const auth = { authorization: 'Bearer sess-token-7' };
+
+  const post = await fetch(`${base}/api/settings`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...auth },
+    body: JSON.stringify({ workdaySync: true, workdayStart: '09:00', workdayEnd: '23:59', workDays: [0,1,2,3,4,5,6], timezone: 'Europe/Moscow' })
+  });
+  const rev1 = (await post.json()).settingsRev;
+
+  const st = await fetch(`${base}/api/state`, { headers: auth });
+  const s1 = await st.json();
+  assert.strictEqual(s1.settingsRev, rev1_fix(), 'state tick carries the same revision');
+  function rev1_fix() { return rev1; }
+
+  // update → next tick shows the new revision
+  await fetch(`${base}/api/settings`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', ...auth },
+    body: JSON.stringify({ workdaySync: true, workdayStart: '10:00', workDays: [0,1,2,3,4,5,6], timezone: 'Europe/Moscow' })
+  });
+  const s2 = await (await fetch(`${base}/api/state`, { headers: auth })).json();
+  assert.notStrictEqual(s2.settingsRev, s1.settingsRev);
+  await storage.stopActiveSession(uid);
 });
 
 test('settings: POST with token does not set cookies', { skip: !hasDb }, async () => {

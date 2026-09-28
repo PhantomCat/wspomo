@@ -39,9 +39,9 @@ test('active-report: relay fires at every timer state change', () => {
   // shows the previous mode for up to 60s (regression fixed 12.09)
   const calls = [...html.matchAll(/sendActiveReport\(\)/g)];
   // definition + all call sites across startTimer, startTimerLocal, tick,
-  // transitions and stop paths (connected mode added startTimerLocal)
-  assert.strictEqual(calls.length, 23,
-    `expected definition + 22 call sites, found ${calls.length}`);
+  // transitions, stop paths and the W-mode Stop button (28.09)
+  assert.strictEqual(calls.length, 24,
+    `expected definition + 23 call sites, found ${calls.length}`);
   // key sites: start (3 branches + final), transitions in tick (both halves), stop paths
   const tickBody = html.slice(html.indexOf('function tick()'), html.indexOf('function calculateSyncedTime()'));
   const tickCalls = [...tickBody.matchAll(/sendActiveReport\(\)/g)].length;
@@ -109,4 +109,23 @@ test('connected: relay is silenced while connected', () => {
 test('connected: poll + interpolation loop exist', () => {
   assert.ok(html.includes('setInterval(pollServerState, 5000)'), '5s state poll');
   assert.ok(html.includes('setInterval(connectedMirror, 1000)'), '1s interpolation mirror');
+});
+
+test('connected: W-mode controls — single Stop replaces Start/Reset/Skip', () => {
+  const btn = html.slice(html.indexOf('id="stopBtn"'), html.indexOf('</button>', html.indexOf('id="stopBtn"')));
+  assert.ok(btn.includes('stopModeHint'), 'Stop must carry the sub-caption');
+  const upd = html.slice(html.indexOf('function updateControls'), html.indexOf('function formatTime'));
+  assert.ok(upd.includes("'stopBtn'") && upd.includes("'startBtn'"), 'updateControls swaps the control set');
+  assert.ok(html.includes("$('stopBtn').addEventListener"), 'Stop has a handler');
+  const stopBody = html.slice(html.indexOf("$('stopBtn').addEventListener"), html.indexOf("$('settingsToggle').addEventListener"));
+  assert.ok(stopBody.includes('workdaySync = false'), 'Stop ends the workday mode');
+  assert.ok(stopBody.includes('resetConnected()'), 'Stop ends the server chain when active');
+});
+
+test('connected: settings revision sync (server row is the source of truth)', () => {
+  assert.ok(html.includes('checkSettingsRev(data.settingsRev)'), 'each tick checks the revision');
+  assert.ok(html.includes('function refetchSettings'), 'refetch on mismatch');
+  assert.ok(html.includes('connected.settingsRev = data.settingsRev'), 'POST/load adopt the fresh revision');
+  const refetch = html.slice(html.indexOf('async function refetchSettings'), html.indexOf('function initTracking'));
+  assert.ok(refetch.includes('applySettings()'), 'refetched settings are applied');
 });

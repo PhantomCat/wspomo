@@ -114,8 +114,11 @@ app.get('/api/settings', async (req, res) => {
   if (token && metricsDb) {
     const session = await storage.findSessionByToken(token);
     if (session) {
-      const data = await storage.getSettings(session.user_id);
-      return res.json({ ...getDefaultSettings(), ...(data || {}) });
+      const meta = await storage.getSettingsMeta(session.user_id);
+      const payload = { ...getDefaultSettings(), ...(meta.data || {}) };
+      // revision marker so clients can detect cross-client changes (28.09)
+      if (meta.data) payload.settingsRev = settingsRevision(meta.data, meta.updatedAt);
+      return res.json(payload);
     }
   }
 
@@ -151,7 +154,10 @@ app.post('/api/settings', async (req, res) => {
     const session = await storage.findSessionByToken(token);
     if (session) {
       await storage.setSettings(session.user_id, req.body || {});
-      return res.json({ ok: true, stored: 'db' });
+      const meta = await storage.getSettingsMeta(session.user_id);
+      // the writer gets the fresh revision immediately; other clients pick it
+      // up from /api/state ticks (28.09)
+      return res.json({ ok: true, stored: 'db', settingsRev: settingsRevision(meta.data, meta.updatedAt) });
     }
   }
 
@@ -416,6 +422,17 @@ async function authUser(req) {
   return storage.findSessionByToken(token);
 }
 
+// ---------- settings revision hash (task 28.09, owner request) ----------
+// Connected clients keep a local copy of the per-user settings and watch a
+// short revision hash in every /api/state tick; when it differs, they re-fetch
+// /api/settings. Hash = first 5 hex chars of sha256(data) + updated_at —
+// collision-safe enough for a handful of clients, ~10 bytes on the wire.
+
+function settingsRevision(data, updatedAt) {
+  const h = crypto.createHash('sha256').update(JSON.stringify(data) + '|' + (updatedAt || '')).digest('hex');
+  return h.slice(0, 5);
+}
+
 // POST /api/session { action: 'start'|'stop', mode: 'synced'|'freeform' }
 // Marks the user's timer chain active/inactive in the DB. Replay in
 // GET /api/state then serves headless clients (waybar/TUI) without a browser.
@@ -455,8 +472,8 @@ app.get('/api/state', async (req, res) => {
   if (user) {
     const row = await storage.getActiveSession(user.user_id);
     if (row && row.mode === 'synced') {
-      const settings = await storage.getSettings(user.user_id);
-      const merged = { ...getDefaultSettings(), ...(settings || {}), workdaySync: true };
+      const meta = await storage.getSettingsMeta(user.user_id);
+      const merged = { ...getDefaultSettings(), ...(meta.data || {}), workdaySync: true };
       const tz = isValidTimezone(merged.timezone) ? merged.timezone : null;
       const now = nowInTz(tz);
       if (now === null) {
@@ -464,6 +481,8 @@ app.get('/api/state', async (req, res) => {
       }
       const state = computeState(merged, now);
       state.auth = 'recognized';
+      // settings revision for multi-client sync (28.09)
+      if (meta.data) state.settingsRev = settingsRevision(meta.data, meta.updatedAt);
       return res.json(state);
     }
     if (row && row.mode === 'freeform') {

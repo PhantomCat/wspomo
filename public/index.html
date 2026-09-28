@@ -187,10 +187,14 @@
       </div>
     </div>
 
-    <div class="controls">
+    <div class="controls" id="controls">
       <button class="btn btn-secondary" id="resetBtn" data-i18n="reset">Сброс</button>
       <button class="btn btn-primary" id="startBtn" data-i18n="start">Старт</button>
       <button class="btn btn-secondary" id="skipBtn" data-i18n="skip">Пропуск</button>
+      <button class="btn btn-stop" id="stopBtn" style="display:none">
+        <span class="btn-stop-main" data-i18n="stopMode">Стоп</span>
+        <span class="btn-stop-sub" data-i18n="stopModeHint">Выключает режим «Work»</span>
+      </button>
     </div>
 
     <div class="session-info">
@@ -249,6 +253,8 @@
         pause: 'Пауза',
         reset: 'Сброс',
         skip: 'Пропуск',
+        stopMode: 'Стоп',
+        stopModeHint: 'Выключает режим «Work»',
         session: 'Сессия',
         focus: 'Фокус',
         shortBreakLabel: 'Короткий перерыв',
@@ -303,6 +309,8 @@
         pause: 'Pause',
         reset: 'Reset',
         skip: 'Skip',
+        stopMode: 'Stop',
+        stopModeHint: 'Turns off Work mode',
         session: 'Session',
         focus: 'Focus',
         shortBreakLabel: 'Short break',
@@ -411,12 +419,25 @@
 
       updateModeTabs();
       updateStartButton();
+      updateControls();
       updateTitle();
     }
 
     function updateStartButton() {
       const t = translations[settings.language] || translations.ru;
       $('startBtn').textContent = state.running ? t.pause : t.start;
+    }
+
+    // W-mode control set (28.09): while the workday mode is active the
+    // schedule runs itself — Start/Pause/Reset/Skip make no sense there.
+    // A single Stop ends the whole mode (server chain stop + W off).
+    function updateControls() {
+      const wMode = settings.workdaySync && state.running;
+      $('stopBtn').style.display = wMode ? 'flex' : 'none';
+      for (const id of ['resetBtn', 'startBtn', 'skipBtn']) {
+        $(id).style.display = wMode ? 'none' : '';
+      }
+      if (!wMode) updateStartButton();
     }
 
     function formatTime(seconds) {
@@ -728,6 +749,7 @@
           updateSessionDots();
           state.running = true;
           updateStartButton();
+          updateControls();
           sendActiveReport(); // synced work/break chain step
           state.intervalId = setInterval(tick, 1000);
           return;
@@ -742,6 +764,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            updateControls();
             sendActiveReport(); // synced lunch step
             state.intervalId = setInterval(tick, 1000);
             return;
@@ -757,6 +780,7 @@
             }
             state.running = false;
             updateStartButton();
+            updateControls();
             updateDisplay();
             sendActiveReport(); // stopped → clear report, waybar back to idle
             return;
@@ -767,10 +791,12 @@
         triggerNotification(nextMode);
         switchMode(nextMode);
         updateStartButton();
+        updateControls();
         $('startBtn').classList.remove('paused');
 
         state.running = true;
         updateStartButton();
+        updateControls();
         sendActiveReport(); // manual chain transition
         state.intervalId = setInterval(tick, 1000);
         return;
@@ -924,6 +950,7 @@
         clearInterval(state.intervalId);
         state.running = false;
         updateStartButton();
+        updateControls();
         updateTitle();
         $('startBtn').classList.add('paused');
         sendActiveReport(); // paused → report cleared, waybar back to idle
@@ -941,6 +968,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            updateControls();
             sendActiveReport(); // started (before-work countdown)
             state.intervalId = setInterval(tick, 1000);
             return;
@@ -957,6 +985,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            updateControls();
             sendActiveReport(); // started (lunch)
             state.intervalId = setInterval(tick, 1000);
             return;
@@ -975,6 +1004,7 @@
 
       state.running = true;
       updateStartButton();
+      updateControls();
       $('startBtn').classList.remove('paused');
       sendActiveReport(); // started
       state.intervalId = setInterval(tick, 1000);
@@ -987,6 +1017,7 @@
       state.currentSession = 1;
       switchMode('work');
       updateStartButton();
+      updateControls();
       $('startBtn').classList.remove('paused');
       sendActiveReport();
     }
@@ -1000,6 +1031,7 @@
       const nextMode = getNextMode();
       switchMode(nextMode);
       updateStartButton();
+      updateControls();
       $('startBtn').classList.remove('paused');
       sendActiveReport();
     }
@@ -1008,6 +1040,7 @@
       try {
         const res = await fetch(settingsEndpoint(), isConnected() ? { headers: authHeaders() } : {});
         const data = await res.json();
+        if (isConnected() && typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
         if (data.language) {
           settings = { ...settings, ...data };
         } else {
@@ -1118,11 +1151,13 @@
       if (!saveConnectedInputs()) return;
 
       try {
-        await fetch(settingsEndpoint(), {
+        const res = await fetch(settingsEndpoint(), {
           method: 'POST',
           headers: settingsPostHeaders(),
           body: JSON.stringify(newSettings)
         });
+        const data = await res.json();
+        if (typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
         settings = newSettings;
 
         if (!state.running) {
@@ -1185,6 +1220,7 @@
         clearInterval(state.intervalId);
         state.running = false;
         updateStartButton();
+        updateControls();
         updateTitle();
         $('startBtn').classList.add('paused');
         sendActiveReport();
@@ -1202,6 +1238,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            updateControls();
             sendActiveReport(); // started (before-work countdown)
             state.intervalId = setInterval(tick, 1000);
             return;
@@ -1218,6 +1255,7 @@
             updateDisplay();
             state.running = true;
             updateStartButton();
+            updateControls();
             sendActiveReport(); // started (lunch)
             state.intervalId = setInterval(tick, 1000);
             return;
@@ -1236,6 +1274,7 @@
 
       state.running = true;
       updateStartButton();
+      updateControls();
       $('startBtn').classList.remove('paused');
       sendActiveReport(); // started
       state.intervalId = setInterval(tick, 1000);
@@ -1253,6 +1292,7 @@
       // connection stays alive: the next poll applies the server's idle state
       state.running = false;
       updateStartButton();
+      updateControls();
       updateTitle();
     }
 
@@ -1302,6 +1342,24 @@
     $('startBtn').addEventListener('click', startTimer);
     $('resetBtn').addEventListener('click', resetTimer);
     $('skipBtn').addEventListener('click', skipSession);
+    $('stopBtn').addEventListener('click', () => {
+      // one button, one meaning: end the workday mode entirely
+      if (isConnected() && connected.chainActive) resetConnected();
+      settings.workdaySync = false;
+      updateSyncToggle();
+      clearInterval(state.intervalId);
+      state.running = false;
+      connected.lastMode = null;
+      fetch(settingsEndpoint(), {
+        method: 'POST',
+        headers: settingsPostHeaders(),
+        body: JSON.stringify(settings)
+      }).catch(() => {});
+      switchMode('work');
+      updateDisplay();
+      sendActiveReport();
+      updateControls();
+    });
     $('settingsToggle').addEventListener('click', openSettings);
     $('settingsClose').addEventListener('click', closeSettings);
     $('settingsOverlay').addEventListener('click', closeSettings);
@@ -1343,6 +1401,7 @@
         clearInterval(state.intervalId);
         state.running = false;
         updateStartButton();
+        updateControls();
         if (connected.chainActive) resetConnected();
         else if (connected.intervalId || connected.mirrorId) stopConnectedPoll();
         sendActiveReport();
@@ -1452,7 +1511,8 @@
       fetchedAt: 0,     // local ms when the snapshot arrived
       lastStateKey: undefined, // transition detection between polls
       lastMode: null,
-      chainActive: false // Start pressed → until Reset (schedule chains can't pause)
+      chainActive: false, // Start pressed → until Reset (schedule chains can't pause)
+      settingsRev: null   // server settings revision (5-char hash, 28.09)
     };
 
     function normalizeServerUrl(raw) {
@@ -1549,6 +1609,7 @@
           if (!isConnected()) return; // disconnected while the request ran
           connected.snapshot = data;
           connected.fetchedAt = fetchedAtLocal;
+          checkSettingsRev(data.settingsRev); // cross-client settings sync
           applyServerState(data);
           setConnectedStatus('ok', 'connectedOk');
         })
@@ -1587,6 +1648,31 @@
       return `${s.state}|${s.mode}|${s.session}|${s.remainingSec}`;
     }
 
+    // ---------- cross-client settings sync (28.09, owner request) ----------
+    // The server profile row is the source of truth while connected: every
+    // /api/state tick carries a 5-char revision hash; on mismatch the client
+    // re-fetches /api/settings once. A client that just saved its own change
+    // already holds the fresh revision (POST response) and skips the refetch.
+
+    function checkSettingsRev(rev) {
+      if (!rev) return;
+      if (connected.settingsRev === null) { connected.settingsRev = rev; return; } // first tick
+      if (rev === connected.settingsRev) return;
+      connected.settingsRev = rev; // adopt before fetch to avoid loops
+      refetchSettings();
+    }
+
+    async function refetchSettings() {
+      try {
+        const res = await fetch(settingsEndpoint(), { headers: authHeaders() });
+        const data = await res.json();
+        if (typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
+        const { settingsRev, ...rest } = data;
+        settings = { ...settings, ...rest };
+        applySettings();
+      } catch (e) { /* next tick retries via the hash mismatch */ }
+    }
+
     function applyServerState(s) {
       const first = connected.lastStateKey === undefined;
       const before = connected.lastStateKey;
@@ -1609,6 +1695,7 @@
         updateModeTabs();
         updateSessionDots();
         updateStartButton();
+        updateControls();
         return;
       }
 
@@ -1619,6 +1706,7 @@
         updateModeTabs();
         $('timerLabel').textContent = t.beforeWork;
         updateStartButton();
+        updateControls();
         return;
       }
 
@@ -1632,6 +1720,7 @@
         $('timerLabel').textContent = t.afterWork;
         updateDisplay();
         updateStartButton();
+        updateControls();
         return;
       }
 
@@ -1640,6 +1729,7 @@
       if (!first && state.running) {
         state.running = false;
         updateStartButton();
+        updateControls();
         updateTitle();
       }
     }

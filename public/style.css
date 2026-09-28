@@ -221,6 +221,32 @@ body {
 
 .btn-secondary:hover { background: var(--ctp-surface2); }
 
+/* W-mode controls (28.09): a single Stop button replaces Start/Reset/Skip —
+   workday chains are schedule-anchored, there is nothing to pause; Stop ends
+   the whole workday mode (server chain stop + W off). */
+.btn-stop {
+  background: var(--ctp-red);
+  color: var(--ctp-crust);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.15rem;
+  line-height: 1.2;
+}
+
+.btn-stop:hover { filter: brightness(1.1); }
+
+.btn-stop .btn-stop-main {
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.btn-stop .btn-stop-sub {
+  font-size: 0.6875rem;
+  font-weight: 400;
+  opacity: 0.85;
+}
+
 .session-info {
   text-align: center;
   color: var(--ctp-subtext0);
