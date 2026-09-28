@@ -428,11 +428,12 @@
       $('startBtn').textContent = state.running ? t.pause : t.start;
     }
 
-    // W-mode control set (28.09): while the workday mode is active the
-    // schedule runs itself — Start/Pause/Reset/Skip make no sense there.
-    // A single Stop ends the whole mode (server chain stop + W off).
+    // W-mode control set (28.09, owner feedback): while W is on the workday
+    // mode owns the controls — the schedule runs itself, there is nothing to
+    // pause or skip. A single Stop ends the whole mode (server chain stop +
+    // W off). Start/Reset/Skip belong to free-form (W off) only.
     function updateControls() {
-      const wMode = settings.workdaySync && state.running;
+      const wMode = settings.workdaySync;
       $('stopBtn').style.display = wMode ? 'flex' : 'none';
       for (const id of ['resetBtn', 'startBtn', 'skipBtn']) {
         $(id).style.display = wMode ? 'none' : '';
@@ -1119,7 +1120,8 @@
         soundEnabled: $('soundEnabled').checked,
         browserNotification: $('browserNotification').checked,
         language: settings.language,
-        theme: settings.theme
+        theme: settings.theme,
+        timezone: settings.timezone || detectBrowserTimezone()
       };
 
       if (newSettings.lunchEnabled) {
@@ -1192,6 +1194,7 @@
         startConnectedPoll(); // no-op when already polling; re-arms after Reset
         state.running = true;
         updateStartButton();
+        updateControls();
       } catch (e) {
         setConnectedStatus('fail', 'connectedFail');
       }
@@ -1592,6 +1595,7 @@
         clearInterval(state.intervalId);
         state.running = false;
         updateStartButton();
+        updateControls();
       }
       switchMode('work');
       updateDisplay();

@@ -116,10 +116,30 @@ test('connected: W-mode controls — single Stop replaces Start/Reset/Skip', () 
   assert.ok(btn.includes('stopModeHint'), 'Stop must carry the sub-caption');
   const upd = html.slice(html.indexOf('function updateControls'), html.indexOf('function formatTime'));
   assert.ok(upd.includes("'stopBtn'") && upd.includes("'startBtn'"), 'updateControls swaps the control set');
+  // W on → Stop visible regardless of running (28.09 feedback); free-form → classic set
+  assert.ok(upd.includes('const wMode = settings.workdaySync;'), 'W mode owns the controls, not the running flag');
   assert.ok(html.includes("$('stopBtn').addEventListener"), 'Stop has a handler');
   const stopBody = html.slice(html.indexOf("$('stopBtn').addEventListener"), html.indexOf("$('settingsToggle').addEventListener"));
   assert.ok(stopBody.includes('workdaySync = false'), 'Stop ends the workday mode');
   assert.ok(stopBody.includes('resetConnected()'), 'Stop ends the server chain when active');
+});
+
+test('connected: every updateStartButton call site refreshes the control set', () => {
+  const lines = html.split('\n');
+  let checked = 0;
+  for (let i = 0; i < lines.length; i++) {
+    if (!/updateStartButton\(\);/.test(lines[i])) continue;
+    if (lines.slice(Math.max(0, i - 12), i).join('\n').includes('function updateControls')) continue;
+    assert.ok(/updateControls/.test(lines[i + 1] || ''),
+      `updateStartButton at line ${i + 1} must be followed by updateControls() (control set must never go stale)`);
+    checked++;
+  }
+  assert.ok(checked >= 20, `expected >=20 guard sites, checked ${checked}`);
+});
+
+test('settings: saves carry the timezone (full-replace on the server row)', () => {
+  const save = html.slice(html.indexOf('const newSettings = {'), html.indexOf('if (newSettings.lunchEnabled)'));
+  assert.ok(save.includes('timezone:'), 'timezone must travel in every POST /api/settings (full replace wipes it otherwise)');
 });
 
 test('connected: settings revision sync (server row is the source of truth)', () => {
