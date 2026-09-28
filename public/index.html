@@ -914,7 +914,12 @@
     }
 
     function startTimer() {
-      if (isConnected()) return startConnected();
+      // W decides the engine (KT-1): on → server synced chain (connected) or
+      // the local synced timer; off → free-form, always browser-local.
+      if (isConnected()) {
+        if (settings.workdaySync) return startConnected();
+        return startFreeformConnected();
+      }
       if (state.running) {
         clearInterval(state.intervalId);
         state.running = false;
@@ -976,7 +981,7 @@
     }
 
     function resetTimer() {
-      if (isConnected()) return resetConnected();
+      if (isConnected() && settings.workdaySync) return resetConnected();
       clearInterval(state.intervalId);
       state.running = false;
       state.currentSession = 1;
@@ -987,7 +992,9 @@
     }
 
     function skipSession() {
-      if (isConnected()) return; // server chains step on schedule; skip is local
+      // connected synced chains step on schedule — skip would fight the server.
+      // Free-form (W off), connected or not, stays fully browser-local.
+      if (isConnected() && settings.workdaySync) return;
       clearInterval(state.intervalId);
       state.running = false;
       const nextMode = getNextMode();
@@ -1155,6 +1162,85 @@
       }
     }
 
+    // Free-form with W off (KT-1): the chain lives in the browser even while
+    // connected — same local engine as standalone, the 5s poll stays down,
+    // and the active-report relay keeps waybar/TUI mirroring the page.
+    function startFreeformConnected() {
+      if (connected.intervalId || connected.mirrorId) stopConnectedPoll();
+      if (connected.chainActive) {
+        // a server chain from a previous W-on run must not tick behind us
+        fetch(`${connectedCreds.url}/api/session`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ action: 'stop' })
+        }).catch(() => {});
+        connected.chainActive = false;
+      }
+      startTimerLocal();
+    }
+
+    function startTimerLocal() {
+      // the pre-connected local branch of startTimer (unchanged semantics)
+      if (state.running) {
+        clearInterval(state.intervalId);
+        state.running = false;
+        updateStartButton();
+        updateTitle();
+        $('startBtn').classList.add('paused');
+        sendActiveReport();
+        return;
+      }
+
+      if (settings.workdaySync) {
+        const synced = calculateSyncedTime();
+        if (synced) {
+          if (synced.type === 'before-work') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.timeLeft;
+            state.mode = 'work';
+            updateModeTabs();
+            updateDisplay();
+            state.running = true;
+            updateStartButton();
+            sendActiveReport(); // started (before-work countdown)
+            state.intervalId = setInterval(tick, 1000);
+            return;
+          }
+          if (synced.type === 'after-work') {
+            sendActiveReport(); // nothing started → clear stale report
+            return;
+          }
+          if (synced.type === 'lunch') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.timeLeft;
+            state.mode = 'lunch';
+            updateModeTabs();
+            updateDisplay();
+            state.running = true;
+            updateStartButton();
+            sendActiveReport(); // started (lunch)
+            state.intervalId = setInterval(tick, 1000);
+            return;
+          }
+          if (synced.type === 'work' || synced.type === 'break') {
+            state.timeLeft = synced.timeLeft;
+            state.totalTime = synced.totalTime;
+            state.mode = synced.mode;
+            state.currentSession = synced.session || state.currentSession;
+            updateModeTabs();
+            updateDisplay();
+            updateSessionDots();
+          }
+        }
+      }
+
+      state.running = true;
+      updateStartButton();
+      $('startBtn').classList.remove('paused');
+      sendActiveReport(); // started
+      state.intervalId = setInterval(tick, 1000);
+    }
+
     async function resetConnected() {
       try {
         await fetch(`${connectedCreds.url}/api/session`, {
@@ -1250,6 +1336,17 @@
     function toggleSync() {
       settings.workdaySync = !settings.workdaySync;
       updateSyncToggle();
+      if (isConnected()) {
+        // switch engines, never run both: W on → stop free-form + server chain
+        // takes over on next Start; W off → stop the server chain, free-form
+        // lives in the browser (KT-1)
+        clearInterval(state.intervalId);
+        state.running = false;
+        updateStartButton();
+        if (connected.chainActive) resetConnected();
+        else if (connected.intervalId || connected.mirrorId) stopConnectedPoll();
+        sendActiveReport();
+      }
       fetch(settingsEndpoint(), {
         method: 'POST',
         headers: settingsPostHeaders(),
@@ -1309,7 +1406,9 @@
     // Relay the current timer state so headless consumers (waybar) mirror the
     // page. Best-effort: tracking failures never affect the timer.
     function sendActiveReport() {
-      if (isConnected()) return; // the server chain is the source of truth
+      // In connected W-on mode the server chain is the source of truth.
+      // Free-form (W off) relays as before — connected or not (KT-1).
+      if (isConnected() && settings.workdaySync) return;
       const active = state.running
         ? { mode: state.mode, remainingSec: state.timeLeft, totalSec: state.totalTime, session: state.mode === 'work' ? state.currentSession : null }
         : null; // null → server clears the report (idle)
@@ -1404,7 +1503,7 @@
     function startConnectedPoll() {
       if (connected.intervalId) return;
       if (state.running) {
-        // the local engine yields to the server chain
+        // the local engine yields to the server chain (W-on mode)
         clearInterval(state.intervalId);
         state.running = false;
       }
@@ -1590,10 +1689,14 @@
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
       }
-      // reconnect silently if creds are stored (page reload, laptop wake)
-      if (isConnected()) {
+      // reconnect silently if creds are stored (page reload, laptop wake).
+      // W on → the server chain is authoritative; W off → free-form lives in
+      // the browser, poll stays down until W is switched back on.
+      if (isConnected() && settings.workdaySync) {
         setConnectedUI();
         startConnectedPoll();
+      } else if (isConnected()) {
+        setConnectedUI();
       }
     });
     initTimeInputs();

@@ -600,6 +600,18 @@ body {
 
 .connected-input {
   width: 180px;
+  padding: 0.5rem;
+  background: var(--ctp-surface0);
+  border: 1px solid var(--ctp-surface1);
+  border-radius: 8px;
+  color: var(--ctp-text);
+  font-size: 0.9375rem;
+  box-sizing: border-box;
+}
+
+.connected-input:focus {
+  outline: none;
+  border-color: var(--ctp-blue);
 }
 
 .connected-input.invalid {

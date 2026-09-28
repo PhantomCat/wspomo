@@ -38,9 +38,10 @@ test('active-report: relay fires at every timer state change', () => {
   // every start/transition/stop path must relay immediately — otherwise waybar
   // shows the previous mode for up to 60s (regression fixed 12.09)
   const calls = [...html.matchAll(/sendActiveReport\(\)/g)];
-  // definition (function sendActiveReport) + >= 11 call sites
-  assert.strictEqual(calls.length, 17,
-    `expected definition + 11 call sites, found ${calls.length}`);
+  // definition + all call sites across startTimer, startTimerLocal, tick,
+  // transitions and stop paths (connected mode added startTimerLocal)
+  assert.strictEqual(calls.length, 23,
+    `expected definition + 22 call sites, found ${calls.length}`);
   // key sites: start (3 branches + final), transitions in tick (both halves), stop paths
   const tickBody = html.slice(html.indexOf('function tick()'), html.indexOf('function calculateSyncedTime()'));
   const tickCalls = [...tickBody.matchAll(/sendActiveReport\(\)/g)].length;
@@ -56,11 +57,32 @@ test('active-report: relay fires at every timer state change', () => {
 
 // ---------- connected mode (task 22.09) ----------
 
+test('connected: W decides the engine — synced→server, freeform→browser', () => {
+  const startBody = html.slice(html.indexOf('function startTimer'), html.indexOf('function resetTimer'));
+  assert.ok(startBody.includes('if (settings.workdaySync) return startConnected();'),
+    'W on + connected → server synced chain');
+  assert.ok(startBody.includes('return startFreeformConnected();'),
+    'W off + connected → free-form stays in the browser');
+  const ffBody = html.slice(html.indexOf('function startFreeformConnected'), html.indexOf('function startTimerLocal'));
+  assert.ok(ffBody.includes('stopConnectedPoll()'), 'free-form must stop the 5s poll');
+  assert.ok(ffBody.includes("'stop'"), 'free-form must stop any leftover server chain');
+  const relayBody = html.slice(html.indexOf('function sendActiveReport'), html.indexOf('function trackPomodoroCompleted'));
+  assert.ok(relayBody.includes('if (isConnected() && settings.workdaySync) return;'),
+    'relay silenced only for connected synced mode; free-form relays (KT-1)');
+});
+
+test('connected: toggleSync switches engines, both never run', () => {
+  const body = html.slice(html.indexOf('function toggleSync'), html.indexOf("$('syncToggle').addEventListener"));
+  assert.ok(body.includes('resetConnected()'), 'W off must stop the server chain');
+  assert.ok(body.includes('stopConnectedPoll()'), 'W on must stop the local poll/free-form');
+});
+
 test('connected: Start/Reset route to server chain, skip is guarded', () => {
   const startBody = html.slice(html.indexOf('function startTimer'), html.indexOf('function resetTimer'));
-  assert.ok(startBody.includes('if (isConnected()) return startConnected();'), 'startTimer must delegate in connected mode');
+  assert.ok(startBody.includes('if (isConnected()) {'), 'startTimer must branch on connection');
   const resetBody = html.slice(html.indexOf('function resetTimer'), html.indexOf('function skipSession'));
-  assert.ok(resetBody.includes('if (isConnected()) return resetConnected();'), 'resetTimer must delegate in connected mode');
+  assert.ok(resetBody.includes('if (isConnected() && settings.workdaySync) return resetConnected();'),
+    'resetTimer must delegate in connected synced mode');
   const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
   assert.ok(css.includes('body.connected #skipBtn'), 'CSS guard for skip in connected mode');
 });
@@ -80,7 +102,8 @@ test('connected: all settings fetches go through settingsEndpoint()', () => {
 
 test('connected: relay is silenced while connected', () => {
   const relayBody = html.slice(html.indexOf('function sendActiveReport'), html.indexOf('function trackPomodoroCompleted'));
-  assert.ok(relayBody.includes('if (isConnected()) return;'), 'server chain is the source of truth — no client relay');
+  assert.ok(relayBody.includes('if (isConnected() && settings.workdaySync) return;'),
+    'relay silenced only for connected synced mode; free-form relays (KT-1)');
 });
 
 test('connected: poll + interpolation loop exist', () => {
