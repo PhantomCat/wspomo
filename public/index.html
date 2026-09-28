@@ -1510,6 +1510,7 @@
     const connected = {
       intervalId: null, // 5s /api/state poll (also the reconnect path)
       mirrorId: null,   // 1s interpolation loop
+      settingsPollId: null, // 60s revision watch (runs in every engine while connected)
       snapshot: null,   // last /api/state payload
       fetchedAt: 0,     // local ms when the snapshot arrived
       lastStateKey: undefined, // transition detection between polls
@@ -1578,6 +1579,7 @@
     function stopConnectedPoll() {
       if (connected.intervalId) { clearInterval(connected.intervalId); connected.intervalId = null; }
       if (connected.mirrorId) { clearInterval(connected.mirrorId); connected.mirrorId = null; }
+      if (connected.settingsPollId) { clearInterval(connected.settingsPollId); connected.settingsPollId = null; }
       connected.snapshot = null;
       connected.fetchedAt = 0;
       connected.lastStateKey = undefined;
@@ -1777,6 +1779,27 @@
         sendActiveReport();
         refreshFooterMetrics();
       }, 60000);
+      // cross-client settings sync (28.09): while connected, watch the
+      // revision in every engine, not only in the W-on poll loop — otherwise
+      // an edit on another client never reaches a free-form tab
+      if (isConnected()) {
+        connected.settingsPollId = setInterval(() => {
+          if (!isConnected()) return;
+          fetch(`${connectedCreds.url}/api/settings`, { headers: authHeaders() })
+            .then(res => (res.ok ? res.json() : Promise.reject(new Error(`status ${res.status}`))))
+            .then(data => {
+              if (typeof data.settingsRev !== 'string') return;
+              if (connected.settingsRev === null) { connected.settingsRev = data.settingsRev; return; }
+              if (data.settingsRev !== connected.settingsRev) {
+                connected.settingsRev = data.settingsRev;
+                const { settingsRev, ...rest } = data;
+                settings = { ...settings, ...rest };
+                applySettings();
+              }
+            })
+            .catch(() => { /* next round retries */ });
+        }, 60000);
+      }
     }
 
     loadSettings().then(() => {

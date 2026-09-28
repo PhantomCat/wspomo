@@ -148,4 +148,8 @@ test('connected: settings revision sync (server row is the source of truth)', ()
   assert.ok(html.includes('connected.settingsRev = data.settingsRev'), 'POST/load adopt the fresh revision');
   const refetch = html.slice(html.indexOf('async function refetchSettings'), html.indexOf('function initTracking'));
   assert.ok(refetch.includes('applySettings()'), 'refetched settings are applied');
+  // revision watch must live in initTracking too — free-form tabs never run
+  // the W-on poll loop, yet edits from other clients must reach them
+  const init = html.slice(html.indexOf('function initTracking'), html.lastIndexOf('</script>'));
+  assert.ok(init.includes('settingsPollId') && init.includes('settingsRev'), '60s revision watch runs in every engine');
 });
