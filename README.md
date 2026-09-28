@@ -110,6 +110,13 @@ All settings are saved in browser cookies and persist between sessions.
 | Language | Auto (browser) | ru / en |
 | Timezone | Auto (browser) | Used to anchor the schedule; override for travel |
 
+**Connected frontend** (optional): the Connection section in settings takes a
+SaaS URL + API token (stored in `localStorage`, never sent in the settings
+payload). With both filled, the page polls `GET /api/state` every 5s and
+interpolates the tick locally, Start/Stop drive `POST /api/session`, and
+settings go to the per-user DB row instead of cookies. Leave the fields empty
+for the standalone local mode (default).
+
 ## API
 
 For headless clients (system bars, scripts, small integrations):

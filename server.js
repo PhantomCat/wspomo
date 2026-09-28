@@ -88,6 +88,24 @@ app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
+// CORS for connected frontends (task 22.09): an OSS page served elsewhere
+// polls /api/state and manages /api/session with a Bearer token — browsers
+// require CORS and a preflight for the Authorization header. Auth itself is
+// the token, not the origin, so these endpoints stay public.
+function corsOpen(req, res, next) {
+  res.set({
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Authorization, Content-Type',
+    'Access-Control-Max-Age': '600'
+  });
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+}
+app.use('/api/state', corsOpen);
+app.use('/api/session', corsOpen);
+app.use('/api/settings', corsOpen);
+
 // ---------- GET /api/settings ----------
 // Auth branch (KT-1, 21.09): a valid Bearer token reads/writes the per-user
 // DB settings row. Cookies keep the standalone single-user path (pre-auth).

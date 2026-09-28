@@ -591,6 +591,33 @@ body {
 
 .sync-info strong { color: var(--ctp-text); }
 
+.connected-box {
+  background: var(--ctp-surface0);
+  border-radius: 8px;
+  padding: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.connected-input {
+  width: 180px;
+}
+
+.connected-input.invalid {
+  border-color: var(--ctp-red);
+}
+
+.connected-status {
+  margin-top: 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--ctp-subtext0);
+}
+
+.connected-status.ok { color: var(--ctp-green); }
+.connected-status.fail { color: var(--ctp-red); }
+
+/* Server chains step on schedule — manual skip would fight the server */
+body.connected #skipBtn { display: none; }
+
 .notification-section {
   background: var(--ctp-surface0);
   border-radius: 8px;

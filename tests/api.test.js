@@ -166,3 +166,25 @@ test('POST /api/settings ignores non-array workDays', async () => {
   assert.ok(cookies.some((c) => c.startsWith('wspomo_main=')));
   assert.ok(!cookies.some((c) => c.startsWith('wspomo_days=')));
 });
+// ---------- CORS for connected frontends (task 22.09) ----------
+
+test('OPTIONS preflight on /api/state answers CORS headers', async () => {
+  const res = await fetch(`${base}/api/state`, { method: 'OPTIONS' });
+  assert.strictEqual(res.status, 204);
+  assert.strictEqual(res.headers.get('access-control-allow-origin'), '*');
+  assert.ok(res.headers.get('access-control-allow-headers').toLowerCase().includes('authorization'));
+});
+
+test('GET /api/state carries CORS headers for cross-origin pages', async () => {
+  const res = await fetch(`${base}/api/state`);
+  assert.strictEqual(res.status, 200);
+  assert.strictEqual(res.headers.get('access-control-allow-origin'), '*');
+});
+
+test('OPTIONS preflight on /api/settings and /api/session', async () => {
+  for (const ep of ['/api/settings', '/api/session']) {
+    const res = await fetch(`${base}${ep}`, { method: 'OPTIONS' });
+    assert.strictEqual(res.status, 204, ep);
+    assert.strictEqual(res.headers.get('access-control-allow-origin'), '*', ep);
+  }
+});

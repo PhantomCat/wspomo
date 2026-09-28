@@ -144,6 +144,24 @@
       </div>
     </div>
 
+    <div class="settings-section" id="connectedSection">
+      <h3 id="connectedSectionTitle">Подключение</h3>
+      <div class="connected-box">
+        <div class="setting-row">
+          <label data-i18n="serverUrl">Адрес сервера</label>
+          <input type="text" id="connectedUrl" class="time-text-input connected-input" placeholder="пусто = локально" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="setting-row">
+          <label data-i18n="apiToken">API-токен</label>
+          <input type="password" id="connectedToken" class="time-text-input connected-input" placeholder="" spellcheck="false" autocomplete="off">
+        </div>
+        <div class="sync-info" id="connectedInfo">
+          <strong data-i18n="connectedHowTitle">Как работает:</strong> <span data-i18n="connectedHowText">Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера даже с закрытым браузером.</span>
+        </div>
+        <div class="connected-status" id="connectedStatus"></div>
+      </div>
+    </div>
+
     <button class="btn-save" id="saveSettings" data-i18n="save">Сохранить</button>
   </div>
 
@@ -247,7 +265,16 @@
         metricsVisitors: 'посетителей',
         metricsFocusHours: 'ч фокуса',
         metricsFocusMinutes: 'мин фокуса',
-        metricsPomodoros: 'помодоро'
+        metricsPomodoros: 'помодоро',
+        connectedSection: 'Подключение',
+        serverUrl: 'Адрес сервера',
+        apiToken: 'API-токен',
+        connectedLocal: 'Локальный режим — таймер живёт в этом браузере',
+        connectedChecking: 'Подключение…',
+        connectedOk: 'Подключено к серверу',
+        connectedFail: 'Сервер не отвечает или токен неверный',
+        connectedHowTitle: 'Как работает:',
+        connectedHowText: 'Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера, даже когда браузер закрыт.'
       },
       en: {
         settings: 'Settings',
@@ -292,7 +319,16 @@
         metricsVisitors: 'visitors',
         metricsFocusHours: 'h focused',
         metricsFocusMinutes: 'min focused',
-        metricsPomodoros: 'pomodoros'
+        metricsPomodoros: 'pomodoros',
+        connectedSection: 'Connection',
+        serverUrl: 'Server URL',
+        apiToken: 'API token',
+        connectedLocal: 'Local mode — the timer lives in this browser',
+        connectedChecking: 'Connecting…',
+        connectedOk: 'Connected to server',
+        connectedFail: 'Server unreachable or token invalid',
+        connectedHowTitle: 'How it works:',
+        connectedHowText: 'Empty — the timer lives in this browser. SaaS URL + token — the tick comes from the server, even with the browser closed.'
       }
     };
 
@@ -358,6 +394,8 @@
       $('durationSectionTitle').textContent = t.durations;
       $('syncSectionTitle').textContent = t.sync;
       $('notifSectionTitle').textContent = t.notifications;
+      const connectedTitle = $('connectedSectionTitle');
+      if (connectedTitle) connectedTitle.textContent = t.connectedSection;
 
       const dayLabels = settings.language === 'en'
         ? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -669,6 +707,8 @@
       }
     }
 
+    // tick() — local engine only. In connected mode the mirror loop drives
+    // the display; startConnectedPoll() clears any running local interval.
     function tick() {
       trackFocusDelta();
       if (state.timeLeft <= 0) {
@@ -874,6 +914,7 @@
     }
 
     function startTimer() {
+      if (isConnected()) return startConnected();
       if (state.running) {
         clearInterval(state.intervalId);
         state.running = false;
@@ -935,6 +976,7 @@
     }
 
     function resetTimer() {
+      if (isConnected()) return resetConnected();
       clearInterval(state.intervalId);
       state.running = false;
       state.currentSession = 1;
@@ -945,6 +987,7 @@
     }
 
     function skipSession() {
+      if (isConnected()) return; // server chains step on schedule; skip is local
       clearInterval(state.intervalId);
       state.running = false;
       const nextMode = getNextMode();
@@ -956,7 +999,7 @@
 
     async function loadSettings() {
       try {
-        const res = await fetch('/api/settings');
+        const res = await fetch(settingsEndpoint(), isConnected() ? { headers: authHeaders() } : {});
         const data = await res.json();
         if (data.language) {
           settings = { ...settings, ...data };
@@ -1065,10 +1108,12 @@
         }
       }
 
+      if (!saveConnectedInputs()) return;
+
       try {
-        await fetch('/api/settings', {
+        await fetch(settingsEndpoint(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: settingsPostHeaders(),
           body: JSON.stringify(newSettings)
         });
         settings = newSettings;
@@ -1087,7 +1132,71 @@
       }
     }
 
+    // ---------- connected-mode controls (task 22.09) ----------
+    // Start/Reset map onto POST /api/session: chains are schedule-anchored, so
+    // they cannot pause — Start activates, Stop deactivates. The UI mirrors
+    // what the server replays; bells come from applyServerState transitions.
+
+    async function startConnected() {
+      try {
+        const res = await fetch(`${connectedCreds.url}/api/session`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ action: 'start', mode: 'synced' })
+        });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        connected.chainActive = true;
+        connected.lastStateKey = undefined; // force state re-apply on next poll
+        startConnectedPoll(); // no-op when already polling; re-arms after Reset
+        state.running = true;
+        updateStartButton();
+      } catch (e) {
+        setConnectedStatus('fail', 'connectedFail');
+      }
+    }
+
+    async function resetConnected() {
+      try {
+        await fetch(`${connectedCreds.url}/api/session`, {
+          method: 'POST',
+          headers: authHeaders({ 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ action: 'stop' })
+        });
+      } catch (e) { /* the poll loop reports the failure */ }
+      connected.chainActive = false;
+      // connection stays alive: the next poll applies the server's idle state
+      state.running = false;
+      updateStartButton();
+      updateTitle();
+    }
+
+    function saveConnectedInputs() {
+      const urlInput = $('connectedUrl');
+      const tokenInput = $('connectedToken');
+      const url = normalizeServerUrl(urlInput.value);
+      const token = tokenInput.value.trim();
+      const t = translations[settings.language] || translations.ru;
+
+      if (url && !token) {
+        tokenInput.classList.add('invalid');
+        return false;
+      }
+      tokenInput.classList.remove('invalid');
+
+      if (url && token) {
+        connectedCreds = { url, token };
+        saveConnectedCreds();
+        setConnectedUI();
+        connectedProbe();
+      } else if (isConnected()) {
+        disconnectConnected();
+      }
+      return true;
+    }
+
     function openSettings() {
+      $('connectedUrl').value = connectedCreds.url || '';
+      $('connectedToken').value = connectedCreds.token || '';
       $('settingsPanel').classList.add('open');
       $('settingsOverlay').classList.add('open');
     }
@@ -1129,9 +1238,9 @@
     function toggleTheme() {
       settings.theme = settings.theme === 'latte' ? 'mocha' : 'latte';
       applyTheme();
-      fetch('/api/settings', {
+      fetch(settingsEndpoint(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: settingsPostHeaders(),
         body: JSON.stringify(settings)
       }).catch(() => {});
     }
@@ -1141,9 +1250,9 @@
     function toggleSync() {
       settings.workdaySync = !settings.workdaySync;
       updateSyncToggle();
-      fetch('/api/settings', {
+      fetch(settingsEndpoint(), {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: settingsPostHeaders(),
         body: JSON.stringify(settings)
       }).catch(() => {});
     }
@@ -1159,9 +1268,9 @@
       btn.addEventListener('click', () => {
         settings.language = btn.dataset.lang;
         applyLanguage();
-        fetch('/api/settings', {
+        fetch(settingsEndpoint(), {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: settingsPostHeaders(),
           body: JSON.stringify(settings)
         }).catch(() => {});
       });
@@ -1200,6 +1309,7 @@
     // Relay the current timer state so headless consumers (waybar) mirror the
     // page. Best-effort: tracking failures never affect the timer.
     function sendActiveReport() {
+      if (isConnected()) return; // the server chain is the source of truth
       const active = state.running
         ? { mode: state.mode, remainingSec: state.timeLeft, totalSec: state.totalTime, session: state.mode === 'work' ? state.currentSession : null }
         : null; // null → server clears the report (idle)
@@ -1212,6 +1322,227 @@
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pomodoro: true })
       }).catch(() => {});
+    }
+
+    // ---------- connected mode (task 22.09) ----------
+    // A SaaS URL + API token turn the page into a connected frontend:
+    // /api/state is polled every 5s (Bearer), the tick is interpolated
+    // locally between polls, and Start/Reset drive the server chain via
+    // POST /api/session. Free-form and the local engine stay untouched when
+    // the connection fields are empty (OSS standalone default, KT-1).
+    // Credentials live in localStorage — they are connection parameters, not
+    // settings, and never travel inside the /api/settings payload.
+
+    const CONNECTED_STORE = 'wspomo_connected';
+
+    function loadConnectedCreds() {
+      try { return JSON.parse(localStorage.getItem(CONNECTED_STORE)) || { url: '', token: '' }; }
+      catch (e) { return { url: '', token: '' }; }
+    }
+
+    function saveConnectedCreds() {
+      try { localStorage.setItem(CONNECTED_STORE, JSON.stringify(connectedCreds)); } catch (e) {}
+    }
+
+    let connectedCreds = loadConnectedCreds();
+
+    const connected = {
+      intervalId: null, // 5s /api/state poll (also the reconnect path)
+      mirrorId: null,   // 1s interpolation loop
+      snapshot: null,   // last /api/state payload
+      fetchedAt: 0,     // local ms when the snapshot arrived
+      lastStateKey: undefined, // transition detection between polls
+      lastMode: null,
+      chainActive: false // Start pressed → until Reset (schedule chains can't pause)
+    };
+
+    function normalizeServerUrl(raw) {
+      let url = (raw || '').trim().replace(/\/+$/, '');
+      // a scheme-less URL would resolve against the current origin and
+      // silently poll the local server instead of the SaaS
+      if (url && !/^https?:\/\//.test(url)) url = 'https://' + url;
+      return url;
+    }
+
+    function isConnected() {
+      return Boolean(connectedCreds.url && connectedCreds.token);
+    }
+
+    function authHeaders(extra) {
+      return { Authorization: `Bearer ${connectedCreds.token}`, ...(extra || {}) };
+    }
+
+    function settingsPostHeaders() {
+      return isConnected()
+        ? authHeaders({ 'Content-Type': 'application/json' })
+        : { 'Content-Type': 'application/json' };
+    }
+
+    function settingsEndpoint() {
+      // connected → per-user settings on the SaaS (Bearer, DB row);
+      // local → same-origin cookie path as before
+      return isConnected() ? `${connectedCreds.url}/api/settings` : '/api/settings';
+    }
+
+    function setConnectedUI() {
+      document.body.classList.toggle('connected', isConnected());
+    }
+
+    function setConnectedStatus(kind, key) {
+      const el = $('connectedStatus');
+      if (!el) return;
+      const t = translations[settings.language] || translations.ru;
+      el.className = 'connected-status' + (kind ? ` ${kind}` : '');
+      el.textContent = key ? (t[key] || '') : '';
+    }
+
+    function connectedProbe() {
+      setConnectedStatus('', 'connectedChecking');
+      startConnectedPoll(); // the 5s loop doubles as the retry path
+    }
+
+    function startConnectedPoll() {
+      if (connected.intervalId) return;
+      if (state.running) {
+        // the local engine yields to the server chain
+        clearInterval(state.intervalId);
+        state.running = false;
+      }
+      connected.intervalId = setInterval(pollServerState, 5000);
+      connected.mirrorId = setInterval(connectedMirror, 1000);
+      pollServerState();
+    }
+
+    function stopConnectedPoll() {
+      if (connected.intervalId) { clearInterval(connected.intervalId); connected.intervalId = null; }
+      if (connected.mirrorId) { clearInterval(connected.mirrorId); connected.mirrorId = null; }
+      connected.snapshot = null;
+      connected.fetchedAt = 0;
+      connected.lastStateKey = undefined;
+      connected.lastMode = null;
+      connected.chainActive = false;
+    }
+
+    function disconnectConnected() {
+      stopConnectedPoll();
+      connectedCreds = { url: '', token: '' };
+      saveConnectedCreds();
+      setConnectedUI();
+      setConnectedStatus('', null);
+      if (state.running) {
+        clearInterval(state.intervalId);
+        state.running = false;
+        updateStartButton();
+      }
+      switchMode('work');
+      updateDisplay();
+    }
+
+    function pollServerState() {
+      if (!isConnected()) return;
+      const fetchedAtLocal = Date.now();
+      fetch(`${connectedCreds.url}/api/state`, { headers: authHeaders() })
+        .then(res => {
+          if (!res.ok) throw new Error(`status ${res.status}`);
+          return res.json();
+        })
+        .then(data => {
+          if (!isConnected()) return; // disconnected while the request ran
+          connected.snapshot = data;
+          connected.fetchedAt = fetchedAtLocal;
+          applyServerState(data);
+          setConnectedStatus('ok', 'connectedOk');
+        })
+        .catch(() => {
+          if (!isConnected()) return;
+          setConnectedStatus('fail', 'connectedFail');
+        });
+    }
+
+    function connectedSnapshot() {
+      // Interpolate the tick between 5s polls from the last server snapshot.
+      if (!connected.snapshot) return null;
+      const elapsed = Math.floor((Date.now() - connected.fetchedAt) / 1000);
+      return { ...connected.snapshot, remainingSec: Math.max(0, connected.snapshot.remainingSec - elapsed) };
+    }
+
+    function connectedMirror() {
+      const snap = connectedSnapshot();
+      if (!snap) return;
+      if (snap.state === 'work' || snap.state === 'break') {
+        state.timeLeft = snap.remainingSec;
+        state.totalTime = snap.totalSec;
+        state.running = true;
+      } else if (snap.state === 'before-work') {
+        state.timeLeft = snap.remainingSec;
+        state.totalTime = Math.max(1, snap.remainingSec);
+        state.running = false;
+      } else {
+        return; // idle / after-work / out-of-scope — the display stays as-is
+      }
+      trackFocusDelta();
+      updateDisplay();
+    }
+
+    function serverStateKey(s) {
+      return `${s.state}|${s.mode}|${s.session}|${s.remainingSec}`;
+    }
+
+    function applyServerState(s) {
+      const first = connected.lastStateKey === undefined;
+      const before = connected.lastStateKey;
+      const key = serverStateKey(s);
+      connected.lastStateKey = key;
+      if (!first && before === key) return; // unchanged between polls
+
+      const t = translations[settings.language] || translations.ru;
+
+      if (s.state === 'work' || s.state === 'break') {
+        const mode = s.mode || (s.state === 'work' ? 'work' : 'shortBreak');
+        if (!first && connected.lastMode !== mode) {
+          registerModeTransition(mode); // pomodoro funnel (counts work→X)
+          triggerNotification(mode);
+        }
+        connected.lastMode = mode;
+        state.mode = mode;
+        state.currentSession = s.session || state.currentSession;
+        state.running = true;
+        updateModeTabs();
+        updateSessionDots();
+        updateStartButton();
+        return;
+      }
+
+      if (s.state === 'before-work') {
+        connected.lastMode = null;
+        state.mode = 'work';
+        state.running = false;
+        updateModeTabs();
+        $('timerLabel').textContent = t.beforeWork;
+        updateStartButton();
+        return;
+      }
+
+      if (s.state === 'after-work') {
+        if (!first && connected.lastMode !== 'after-work') triggerNotification('afterWork');
+        connected.lastMode = 'after-work';
+        state.running = false;
+        state.timeLeft = 0;
+        state.totalTime = Math.max(1, state.totalTime);
+        updateModeTabs();
+        $('timerLabel').textContent = t.afterWork;
+        updateDisplay();
+        updateStartButton();
+        return;
+      }
+
+      // idle / out-of-scope (weekend): nothing runs server-side
+      connected.lastMode = null;
+      if (!first && state.running) {
+        state.running = false;
+        updateStartButton();
+        updateTitle();
+      }
     }
 
     async function refreshFooterMetrics() {
@@ -1258,6 +1589,11 @@
     loadSettings().then(() => {
       if (settings.browserNotification && 'Notification' in window && Notification.permission === 'default') {
         Notification.requestPermission();
+      }
+      // reconnect silently if creds are stored (page reload, laptop wake)
+      if (isConnected()) {
+        setConnectedUI();
+        startConnectedPoll();
       }
     });
     initTimeInputs();

@@ -53,3 +53,37 @@ test('active-report: relay fires at every timer state change', () => {
   const skipBody = html.slice(html.indexOf('function skipSession'), html.indexOf('async function loadSettings'));
   assert.ok(skipBody.includes('sendActiveReport()'), 'skipSession must relay');
 });
+
+// ---------- connected mode (task 22.09) ----------
+
+test('connected: Start/Reset route to server chain, skip is guarded', () => {
+  const startBody = html.slice(html.indexOf('function startTimer'), html.indexOf('function resetTimer'));
+  assert.ok(startBody.includes('if (isConnected()) return startConnected();'), 'startTimer must delegate in connected mode');
+  const resetBody = html.slice(html.indexOf('function resetTimer'), html.indexOf('function skipSession'));
+  assert.ok(resetBody.includes('if (isConnected()) return resetConnected();'), 'resetTimer must delegate in connected mode');
+  const css = fs.readFileSync(path.join(__dirname, '..', 'public', 'style.css'), 'utf8');
+  assert.ok(css.includes('body.connected #skipBtn'), 'CSS guard for skip in connected mode');
+});
+
+test('connected: creds live in localStorage, never in the settings payload', () => {
+  assert.ok(html.includes('localStorage.setItem'), 'creds must persist in localStorage');
+  const saveBody = html.slice(html.indexOf('async function saveSettings'), html.indexOf('function saveConnectedInputs'));
+  assert.ok(!saveBody.includes('connectedToken'), 'token must not travel inside POST /api/settings body');
+  assert.ok(!saveBody.includes('connectedUrl'), 'url must not travel inside POST /api/settings body');
+});
+
+test('connected: all settings fetches go through settingsEndpoint()', () => {
+  assert.ok(html.includes('function settingsEndpoint()'), 'endpoint helper must exist');
+  assert.strictEqual([...html.matchAll(/fetch\('\/api\/settings'/g)].length, 0,
+    'every settings fetch must route via settingsEndpoint() (per-user on SaaS, cookies locally)');
+});
+
+test('connected: relay is silenced while connected', () => {
+  const relayBody = html.slice(html.indexOf('function sendActiveReport'), html.indexOf('function trackPomodoroCompleted'));
+  assert.ok(relayBody.includes('if (isConnected()) return;'), 'server chain is the source of truth — no client relay');
+});
+
+test('connected: poll + interpolation loop exist', () => {
+  assert.ok(html.includes('setInterval(pollServerState, 5000)'), '5s state poll');
+  assert.ok(html.includes('setInterval(connectedMirror, 1000)'), '1s interpolation mirror');
+});
