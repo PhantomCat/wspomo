@@ -166,6 +166,9 @@ test('profile: UI hidden without a principal, raw token shown once', () => {
   assert.ok(js.includes('refreshProfile();') || html.includes('refreshProfile(); // principal'), 'openSettings refreshes the profile');
   assert.ok(html.includes("$('logoutBtn').addEventListener"), 'logout handler wired');
   assert.ok(js.includes("'/api/auth/logout'"), 'logout hits the same-origin endpoint only');
+  // variant A (owner, 30.09): logout = full sign-out of this browser —
+  // stored connection credentials must be forgotten too
+  assert.ok(js.includes('disconnectConnected()'), 'logout forgets the stored token (variant A)');
   const revokes = [...html.matchAll(/revoke\.dataset\.tokenId/g)].length;
   assert.strictEqual(revokes, 1, 'each listed token gets its own revoke button');
 });

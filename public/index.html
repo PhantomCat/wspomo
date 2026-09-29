@@ -1929,8 +1929,14 @@
         // when the page IS the SaaS page
         await fetch('/api/auth/logout', { method: 'POST' });
       } catch (e) { /* best-effort */ }
+      // full sign-out of THIS browser (owner decision 30.09, variant A):
+      // forget the stored connection credentials too — otherwise refreshProfile
+      // instantly "logs back in" through the API token living in localStorage
+      // (server-side the token stays alive: waybar/TUI keep working)
+      disconnectConnected();
       hideNewToken();
       $('profileSection').style.display = 'none';
+      updateDisplay();
     }
 
     async function refreshFooterMetrics() {
