@@ -1372,12 +1372,14 @@
     function openSettings() {
       $('connectedUrl').value = connectedCreds.url || '';
       $('connectedToken').value = connectedCreds.token || '';
+      hideNewToken(); // once-only: a shown secret never survives reopen
       $('settingsPanel').classList.add('open');
       $('settingsOverlay').classList.add('open');
       refreshProfile(); // principal → show the profile section
     }
 
     function closeSettings() {
+      hideNewToken();
       $('settingsPanel').classList.remove('open');
       $('settingsOverlay').classList.remove('open');
     }
