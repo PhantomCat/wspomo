@@ -107,19 +107,17 @@ app.use('/api/session', corsOpen);
 app.use('/api/settings', corsOpen);
 
 // ---------- GET /api/settings ----------
-// Auth branch (KT-1, 21.09): a valid Bearer token reads/writes the per-user
-// DB settings row. Cookies keep the standalone single-user path (pre-auth).
+// Auth branch (KT-1, 21.09; auth skeleton 29.09): an authenticated principal
+// (Bearer API token OR web-session cookie) reads/writes the per-user DB
+// settings row. Anonymous cookies keep the standalone single-user path.
 app.get('/api/settings', async (req, res) => {
-  const token = readBearerToken(req);
-  if (token && metricsDb) {
-    const session = await storage.findSessionByToken(token);
-    if (session) {
-      const meta = await storage.getSettingsMeta(session.user_id);
-      const payload = { ...getDefaultSettings(), ...(meta.data || {}) };
-      // revision marker so clients can detect cross-client changes (28.09)
-      if (meta.data) payload.settingsRev = settingsRevision(meta.data, meta.updatedAt);
-      return res.json(payload);
-    }
+  const session = await authRequest(req);
+  if (session) {
+    const meta = await storage.getSettingsMeta(session.user_id);
+    const payload = { ...getDefaultSettings(), ...(meta.data || {}) };
+    // revision marker so clients can detect cross-client changes (28.09)
+    if (meta.data) payload.settingsRev = settingsRevision(meta.data, meta.updatedAt);
+    return res.json(payload);
   }
 
   const main = parseCookie(req.cookies.wspomo_main);
@@ -147,18 +145,15 @@ app.get('/api/settings', async (req, res) => {
 app.post('/api/settings', async (req, res) => {
   const { language, workDays, theme, ...main } = req.body || {};
 
-  // Auth branch: valid token → upsert full body into the user's DB row
-  // (full replace, matching storage.setSettings semantics).
-  const token = readBearerToken(req);
-  if (token && metricsDb) {
-    const session = await storage.findSessionByToken(token);
-    if (session) {
-      await storage.setSettings(session.user_id, req.body || {});
-      const meta = await storage.getSettingsMeta(session.user_id);
-      // the writer gets the fresh revision immediately; other clients pick it
-      // up from /api/state ticks (28.09)
-      return res.json({ ok: true, stored: 'db', settingsRev: settingsRevision(meta.data, meta.updatedAt) });
-    }
+  // Auth branch: authenticated principal → upsert full body into the user's
+  // DB row (full replace, matching storage.setSettings semantics).
+  const session = await authRequest(req);
+  if (session) {
+    await storage.setSettings(session.user_id, req.body || {});
+    const meta = await storage.getSettingsMeta(session.user_id);
+    // the writer gets the fresh revision immediately; other clients pick it
+    // up from /api/state ticks (28.09)
+    return res.json({ ok: true, stored: 'db', settingsRev: settingsRevision(meta.data, meta.updatedAt) });
   }
 
   res.cookie('wspomo_main', JSON.stringify(main), COOKIE_OPTS);
@@ -415,12 +410,71 @@ function isValidTimezone(tzName) {
   return Boolean(tzName) && nowInTz(tzName) !== null;
 }
 
-// Resolve a Bearer token to a user row; null when no DB, no token or no match.
+// Resolve an API token (Bearer header) to a user row; null on any miss.
+// Kept for /api/session's strict Bearer-only contract.
 async function authUser(req) {
   const token = readBearerToken(req);
   if (!token || !metricsDb) return null;
   return storage.findSessionByToken(token);
 }
+
+// Resolve ANY authenticated principal (auth skeleton, 29.09): Bearer API
+// token first, then the web session cookie. Returns the sessions row or
+// null. Single funnel — endpoints stop hand-rolling token lookups.
+async function authRequest(req) {
+  if (!metricsDb) return null;
+
+  // 1. headless clients: Authorization: Bearer <api-token>
+  const bearer = readBearerToken(req);
+  if (bearer) return storage.findSessionByToken(bearer);
+
+  // 2. the browser: wspomo_session cookie (httpOnly web session token)
+  const cookieToken = typeof req.cookies.wspomo_session === 'string' ? req.cookies.wspomo_session : null;
+  if (cookieToken) return storage.findSessionByToken(cookieToken);
+
+  return null;
+}
+
+// ---------- web sessions (auth skeleton, 29.09) ----------
+// A logged-in browser carries the wspomo_session cookie (httpOnly, 30 days).
+// The raw token lives only in the cookie; the DB stores its sha256 hash.
+// Auth itself comes with email OTP (30.09, Resend); for now the only entry
+// point is the dev-only mint endpoint below, gated off production.
+
+const WEB_SESSION_COOKIE = 'wspomo_session';
+const WEB_SESSION_DAYS = 30;
+const WEB_COOKIE_OPTS = {
+  maxAge: WEB_SESSION_DAYS * 24 * 60 * 60 * 1000,
+  httpOnly: true,
+  sameSite: 'lax',
+  path: '/',
+  // secure is set in production behind caddy (HTTPS); dev on :3000 is plain
+  secure: process.env.NODE_ENV === 'production'
+};
+
+// Find or create the user by email (unique key).
+function findOrCreateUser(email) {
+  return storage.findOrCreateUser(email);
+}
+
+// Dev-only session mint (removed once email OTP lands, 30.09) — gated off by
+// WSPOMO_DEV_AUTH being unset AND a database being configured. On prod this
+// answers 404. Body: { email } → sets the web-session cookie + returns it
+// once in the response so tests and local dev can use it as Bearer too.
+app.post('/api/auth/dev-mint', async (req, res) => {
+  if (!metricsDb || process.env.WSPOMO_DEV_AUTH !== '1') {
+    return res.status(404).json({ ok: false });
+  }
+  const email = (req.body && typeof req.body.email === 'string' ? req.body.email : '').trim().toLowerCase();
+  if (!email || !email.includes('@') || email.length > 200) {
+    return res.status(400).json({ ok: false, error: 'invalid_email' });
+  }
+  const user = await findOrCreateUser(email);
+  const token = crypto.randomBytes(24).toString('hex');
+  await storage.createSession(user.id, 'web', token, { label: 'dev-mint' });
+  res.cookie(WEB_SESSION_COOKIE, token, WEB_COOKIE_OPTS);
+  res.json({ ok: true, email: user.email, token }); // token returned for tests/headless convenience
+});
 
 // ---------- settings revision hash (task 28.09, owner request) ----------
 // Connected clients keep a local copy of the per-user settings and watch a
@@ -437,6 +491,8 @@ function settingsRevision(data, updatedAt) {
 // Marks the user's timer chain active/inactive in the DB. Replay in
 // GET /api/state then serves headless clients (waybar/TUI) without a browser.
 app.post('/api/session', async (req, res) => {
+  // Bearer-only by design: a web session cookie on a shared browser must not
+  // silently activate the user's headless schedule chain.
   const user = await authUser(req);
   if (!user) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
@@ -465,10 +521,10 @@ app.get('/api/state', async (req, res) => {
     return res.json(active);
   }
 
-  // Priority 2 (server-authoritative, KT-1): valid Bearer → the user's
-  // active session row + their settings → schedule replay. Without a token
-  // this stays idle: OSS standalone never replays a schedule (issue #2).
-  const user = await authUser(req);
+  // Priority 2 (server-authoritative, KT-1): authenticated principal → the
+  // user's active session row + their settings → schedule replay. Anonymous
+  // callers stay idle: OSS standalone never replays a schedule (issue #2).
+  const user = await authRequest(req);
   if (user) {
     const row = await storage.getActiveSession(user.user_id);
     if (row && row.mode === 'synced') {

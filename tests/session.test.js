@@ -258,3 +258,99 @@ test('settings: invalid token falls through to the cookie path', { skip: !hasDb 
   assert.strictEqual(data.workDuration, 25); // defaults (no cookies sent)
   assert.ok(!('stored' in data));
 });
+// ---------- auth skeleton: web sessions via cookie (29.09) ----------
+
+test('users: findOrCreateUser is idempotent on email', { skip: !hasDb }, async () => {
+  const a = await storage.findOrCreateUser('cookie-1@example.com');
+  const b = await storage.findOrCreateUser('cookie-1@example.com');
+  assert.strictEqual(a.id, b.id);
+  assert.strictEqual(a.email, 'cookie-1@example.com');
+  await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+});
+
+test('dev-mint is 404 without WSPOMO_DEV_AUTH even with a DB', { skip: !hasDb }, async () => {
+  const res = await fetch(`${base}/api/auth/dev-mint`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ email: 'x@example.com' })
+  });
+  assert.strictEqual(res.status, 404);
+});
+
+test('web session: mint → cookie → settings go to the per-user row', { skip: !hasDb }, async () => {
+  const prev = process.env.WSPOMO_DEV_AUTH;
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    const mint = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-2@example.com' })
+    });
+    assert.strictEqual(mint.status, 200);
+    const { token, email } = await mint.json();
+    assert.strictEqual(email, 'cookie-2@example.com');
+
+    const setCookie = mint.headers.get('set-cookie') || '';
+    assert.ok(setCookie.includes('wspomo_session='),
+      'session cookie is set on mint');
+    assert.ok(/httponly/i.test(setCookie), 'session cookie must be httpOnly');
+
+    // the cookie alone authenticates /api/settings (no Bearer header)
+    const cookiePair = setCookie.split(';')[0];
+    const res = await fetch(`${base}/api/settings`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookiePair },
+      body: JSON.stringify({ workDuration: 55 })
+    });
+    const data = await res.json();
+    assert.strictEqual(data.stored, 'db', 'web session drives the per-user path');
+
+    // round-trip via the cookie
+    const get = await fetch(`${base}/api/settings`, { headers: { cookie: cookiePair } });
+    assert.strictEqual((await get.json()).workDuration, 55);
+
+    // GET /api/state with the cookie + active chain → replay works too
+    await storage.startActiveSession((await storage.findSessionByToken(token)).user_id, 'synced');
+    await storage.setSettings((await storage.findSessionByToken(token)).user_id,
+      { workdaySync: true, workdayStart: '09:00', workdayEnd: '23:59',
+        workDays: [0,1,2,3,4,5,6], timezone: 'Europe/Moscow' });
+    const st = await fetch(`${base}/api/state`, { headers: { cookie: cookiePair } });
+    assert.strictEqual((await st.json()).auth, 'recognized');
+
+    // Bearer-only contract on /api/session: the web cookie must NOT drive it
+    const chained = await fetch(`${base}/api/session`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookiePair },
+      body: JSON.stringify({ action: 'start', mode: 'synced' })
+    });
+    assert.strictEqual(chained.status, 401, 'web cookie must not start headless chains');
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = prev;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});
+
+test('web session: revoked cookie falls through to the anonymous path', { skip: !hasDb }, async () => {
+  const prev = process.env.WSPOMO_DEV_AUTH;
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    const mint = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-3@example.com' })
+    });
+    const { token } = await mint.json();
+    const session = await storage.findSessionByToken(token);
+    await storage.revokeSession(session.id);
+
+    const res = await fetch(`${base}/api/settings`, {
+      headers: { cookie: `wspomo_session=${token}` }
+    });
+    const data = await res.json();
+    assert.strictEqual(data.workDuration, 25, 'revoked → defaults (cookie ignored)');
+    assert.ok(!('stored' in data), 'must not take the per-user path');
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = prev;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});
