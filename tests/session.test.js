@@ -354,3 +354,177 @@ test('web session: revoked cookie falls through to the anonymous path', { skip: 
     await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
   }
 });
+
+// ---------- profile + API token management (auth part 2, 29.09) ----------
+
+test('tokens: mint via cookie, token shown once, me() lists it', { skip: !hasDb }, async () => {
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    const mint = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-4@example.com' })
+    });
+    const cookiePair = (mint.headers.get('set-cookie') || '').split(';')[0];
+
+    const me0 = await (await fetch(`${base}/api/auth/me`, { headers: { cookie: cookiePair } })).json();
+    assert.strictEqual(me0.email, 'cookie-4@example.com');
+    assert.strictEqual(me0.apiTokens.length, 0);
+    assert.strictEqual(me0.sessionType, 'web');
+
+    const mintT = await fetch(`${base}/api/auth/tokens`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', cookie: cookiePair },
+      body: JSON.stringify({ label: 'waybar' })
+    });
+    const tok = await mintT.json();
+    assert.strictEqual(mintT.status, 200);
+    assert.match(tok.token, /^[0-9a-f]{48}$/, 'raw token returned once, 48 hex');
+    assert.strictEqual(tok.hint, 'copy-now-shown-once');
+
+    const me1 = await (await fetch(`${base}/api/auth/me`, { headers: { cookie: cookiePair } })).json();
+    assert.strictEqual(me1.apiTokens.length, 1);
+    assert.strictEqual(me1.apiTokens[0].label, 'waybar');
+    assert.ok(!('token' in me1.apiTokens[0]), 'raw token never appears in listings');
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = undefined;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});
+
+test('tokens: the minted API token authenticates like Bearer and appears in me()', { skip: !hasDb }, async () => {
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    const mint = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-5@example.com' })
+    });
+    const cookiePair = (mint.headers.get('set-cookie') || '').split(';')[0];
+    const { token: apiToken } = await (
+      await fetch(`${base}/api/auth/tokens`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', cookie: cookiePair },
+        body: JSON.stringify({ label: 'tui' })
+      })
+    ).json();
+
+    // the new token works as a Bearer for per-user endpoints
+    const st = await fetch(`${base}/api/settings`, { headers: { authorization: `Bearer ${apiToken}` } });
+    assert.strictEqual((await st.json()).ok === undefined, true, 'bearer works');
+    const me = await fetch(`${base}/api/auth/me`, { headers: { authorization: `Bearer ${apiToken}` } });
+    const meData = await me.json();
+    assert.strictEqual(meData.email, 'cookie-5@example.com');
+    assert.strictEqual(meData.sessionType, 'api', 'API token is a principal of its own');
+
+    // ...but must not start headless chains? — no: API tokens ARE the headless
+    // credential. Web cookies are the restricted ones.
+    const chained = await fetch(`${base}/api/session`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${apiToken}` },
+      body: JSON.stringify({ action: 'start', mode: 'synced' })
+    });
+    assert.strictEqual(chained.status, 200);
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = undefined;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});
+
+test('tokens: limit 10 active, 409 on overflow; label validation', { skip: !hasDb }, async () => {
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    const mint = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-6@example.com' })
+    });
+    const cookiePair = (mint.headers.get('set-cookie') || '').split(';')[0];
+    const auth = { 'content-type': 'application/json', cookie: cookiePair };
+
+    for (let i = 0; i < 10; i++) {
+      const r = await fetch(`${base}/api/auth/tokens`, {
+        method: 'POST', headers: auth, body: JSON.stringify({ label: `tok-${i}` })
+      });
+      assert.strictEqual(r.status, 200, `token ${i} minted`);
+    }
+    const over = await fetch(`${base}/api/auth/tokens`, {
+      method: 'POST', headers: auth, body: JSON.stringify({ label: 'tok-11' })
+    });
+    assert.strictEqual(over.status, 429);
+
+    const bad = await fetch(`${base}/api/auth/tokens`, {
+      method: 'POST', headers: auth, body: JSON.stringify({ label: '' })
+    });
+    assert.strictEqual(bad.status, 400);
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = undefined;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});
+
+test('tokens: revoke another user token → 404; revoke own api token works', { skip: !hasDb }, async () => {
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    // user A with one token
+    const mintA = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-7@example.com' })
+    });
+    const pairA = (mintA.headers.get('set-cookie') || '').split(';')[0];
+    const { token: tokA_raw } = await (await fetch(`${base}/api/auth/tokens`, {
+      method: 'POST', headers: { 'content-type': 'application/json', cookie: pairA },
+      body: JSON.stringify({ label: 'A-token' })
+    })).json();
+    const meA = await (await fetch(`${base}/api/auth/me`, { headers: { authorization: `Bearer ${tokA_raw}` } })).json();
+    const tokenIdA = meA.sessionType === 'api' ? meA.currentSessionId : meA.apiTokens[0].id;
+
+    // user B tries to revoke A's token by id
+    const mintB = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-8@example.com' })
+    });
+    const pairB = (mintB.headers.get('set-cookie') || '').split(';')[0];
+
+    const cross = await fetch(`${base}/api/auth/tokens/${tokenIdA}`, {
+      method: 'DELETE', headers: { cookie: pairB }
+    });
+    assert.strictEqual(cross.status, 404, 'foreign token id is invisible');
+
+    // A revokes their own token — Bearer dies immediately
+    const self = await fetch(`${base}/api/auth/tokens/${tokenIdA}`, {
+      method: 'DELETE', headers: { cookie: pairA }
+    });
+    assert.strictEqual(self.status, 200);
+    const after = await fetch(`${base}/api/settings`, { headers: { authorization: `Bearer ${tokA_raw}` } });
+    assert.strictEqual((await after.json()).workDuration, 25, 'revoked Bearer → anonymous defaults');
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = undefined;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});
+
+test('logout: revoke the web session + clear the cookie', { skip: !hasDb }, async () => {
+  process.env.WSPOMO_DEV_AUTH = '1';
+  try {
+    const mint = await fetch(`${base}/api/auth/dev-mint`, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ email: 'cookie-9@example.com' })
+    });
+    const setCookie = mint.headers.get('set-cookie') || '';
+    const cookiePair = setCookie.split(';')[0];
+
+    const out = await fetch(`${base}/api/auth/logout`, {
+      method: 'POST', headers: { cookie: cookiePair }
+    });
+    assert.strictEqual(out.status, 200);
+    const cleared = out.headers.get('set-cookie') || '';
+    assert.ok(/wspomo_session=;/.test(cleared) || /wspomo_session=$/.test(cleared) || /Expires=Thu, 01 Jan 1970/.test(cleared),
+      'logout must clear the cookie');
+    const me = await fetch(`${base}/api/auth/me`, { headers: { cookie: cookiePair } });
+    assert.strictEqual(me.status, 401, 'session is revoked server-side');
+  } finally {
+    process.env.WSPOMO_DEV_AUTH = undefined;
+    await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
+  }
+});

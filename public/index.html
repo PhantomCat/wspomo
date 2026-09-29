@@ -162,6 +162,30 @@
       </div>
     </div>
 
+    <div class="settings-section" id="profileSection" style="display:none">
+      <h3 id="profileSectionTitle">Профиль</h3>
+      <div class="connected-box">
+        <div class="profile-email" id="profileEmail"></div>
+        <div class="profile-tokens" id="profileTokens"></div>
+        <div class="profile-mint-row">
+          <input type="text" id="newTokenLabel" class="connected-input profile-label-input" placeholder="waybar, tui…" maxlength="50" spellcheck="false" autocomplete="off">
+          <button class="btn-profile-action" id="mintTokenBtn" data-i18n="mintToken">Создать токен</button>
+        </div>
+        <div class="profile-new-token" id="newTokenBox" style="display:none">
+          <div class="sync-info">
+            <strong data-i18n="tokenOnceTitle">Токен показывается один раз:</strong> <span data-i18n="tokenOnceText">скопируйте сейчас — после закрытия окна он больше не будет доступен.</span>
+          </div>
+          <div class="profile-token-row">
+            <code id="newTokenValue" class="profile-token-value"></code>
+            <button class="btn-profile-action" id="copyTokenBtn" data-i18n="copyToken">Копировать</button>
+          </div>
+        </div>
+        <div class="profile-actions-row">
+          <button class="btn-profile-action danger" id="logoutBtn" data-i18n="logout">Выйти</button>
+        </div>
+      </div>
+    </div>
+
     <button class="btn-save" id="saveSettings" data-i18n="save">Сохранить</button>
   </div>
 
@@ -280,7 +304,17 @@
         connectedOk: 'Подключено к серверу',
         connectedFail: 'Сервер не отвечает или токен неверный',
         connectedHowTitle: 'Как работает:',
-        connectedHowText: 'Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера, даже когда браузер закрыт.'
+        connectedHowText: 'Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера, даже когда браузер закрыт.',
+        profileSection: 'Профиль',
+        mintToken: 'Создать токен',
+        tokenOnceTitle: 'Токен показывается один раз:',
+        tokenOnceText: 'скопируйте сейчас — после закрытия окна он больше не будет доступен.',
+        copyToken: 'Копировать',
+        copied: 'Скопировано ✓',
+        logout: 'Выйти',
+        revoke: 'Отозвать',
+        noTokens: 'API-токенов нет — создайте для waybar/TUI.',
+        profileFail: 'Не удалось загрузить профиль'
       },
       en: {
         settings: 'Settings',
@@ -336,7 +370,17 @@
         connectedOk: 'Connected to server',
         connectedFail: 'Server unreachable or token invalid',
         connectedHowTitle: 'How it works:',
-        connectedHowText: 'Empty — the timer lives in this browser. SaaS URL + token — the tick comes from the server, even with the browser closed.'
+        connectedHowText: 'Empty — the timer lives in this browser. SaaS URL + token — the tick comes from the server, even with the browser closed.',
+        profileSection: 'Profile',
+        mintToken: 'Create token',
+        tokenOnceTitle: 'The token is shown once:',
+        tokenOnceText: 'copy it now — after this window closes it is gone for good.',
+        copyToken: 'Copy',
+        copied: 'Copied ✓',
+        logout: 'Log out',
+        revoke: 'Revoke',
+        noTokens: 'No API tokens yet — create one for waybar/TUI.',
+        profileFail: 'Failed to load the profile'
       }
     };
 
@@ -404,6 +448,8 @@
       $('notifSectionTitle').textContent = t.notifications;
       const connectedTitle = $('connectedSectionTitle');
       if (connectedTitle) connectedTitle.textContent = t.connectedSection;
+      const profileTitle = $('profileSectionTitle');
+      if (profileTitle) profileTitle.textContent = t.profileSection;
 
       const dayLabels = settings.language === 'en'
         ? ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
@@ -1328,6 +1374,7 @@
       $('connectedToken').value = connectedCreds.token || '';
       $('settingsPanel').classList.add('open');
       $('settingsOverlay').classList.add('open');
+      refreshProfile(); // principal → show the profile section
     }
 
     function closeSettings() {
@@ -1368,6 +1415,9 @@
     $('settingsOverlay').addEventListener('click', closeSettings);
     $('saveSettings').addEventListener('click', saveSettings);
     $('testSoundBtn').addEventListener('click', playTestSound);
+    $('mintTokenBtn').addEventListener('click', mintToken);
+    $('copyTokenBtn').addEventListener('click', copyNewToken);
+    $('logoutBtn').addEventListener('click', logoutProfile);
 
     $('lunchEnabled').addEventListener('change', toggleLunchFields);
 
@@ -1762,6 +1812,123 @@
         updateControls();
         updateTitle();
       }
+    }
+
+    // ---------- profile & API tokens (auth part 2, 29.09) ----------
+    // Lives on the SaaS page (same-origin cookie). On an OSS page opened from
+    // another origin the profile section stays hidden — cross-origin cookies
+    // are not sent (owner decision 29.09); the OSS page only consumes an
+    // existing token via the Connection section.
+
+    function profileEndpoint() {
+      return isConnected() ? `${connectedCreds.url}/api/auth` : '/api/auth';
+    }
+
+    function t18() {
+      return translations[settings.language] || translations.ru;
+    }
+
+    async function refreshProfile() {
+      const section = $('profileSection');
+      if (!section) return;
+      try {
+        const res = await fetch(`${profileEndpoint()}/me`, isConnected() ? { headers: authHeaders() } : {});
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const me = await res.json();
+        section.style.display = '';
+        $('profileEmail').textContent = me.email || '';
+        renderTokens(me.apiTokens || []);
+      } catch (e) {
+        section.style.display = 'none'; // no principal → no profile UI
+      }
+    }
+
+    function renderTokens(tokens) {
+      const box = $('profileTokens');
+      const t = t18();
+      box.innerHTML = '';
+      if (!tokens.length) {
+        const empty = document.createElement('div');
+        empty.className = 'profile-empty';
+        empty.textContent = t.noTokens;
+        box.appendChild(empty);
+        return;
+      }
+      for (const tok of tokens) {
+        const row = document.createElement('div');
+        row.className = 'profile-token-item';
+        const label = document.createElement('span');
+        label.className = 'profile-token-label';
+        label.textContent = tok.label || 'token';
+        const revoke = document.createElement('button');
+        revoke.className = 'btn-profile-action danger small';
+        revoke.textContent = t.revoke;
+        revoke.dataset.tokenId = tok.id;
+        revoke.addEventListener('click', () => revokeToken(tok.id));
+        row.appendChild(label);
+        row.appendChild(revoke);
+        box.appendChild(row);
+      }
+    }
+
+    async function mintToken() {
+      const label = $('newTokenLabel').value.trim();
+      if (!label) return;
+      try {
+        const res = await fetch(`${profileEndpoint()}/tokens`, {
+          method: 'POST',
+          headers: isConnected() ? authHeaders({ 'Content-Type': 'application/json' }) : { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ label })
+        });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        const { token } = await res.json();
+        $('newTokenValue').textContent = token;
+        $('newTokenBox').style.display = '';
+        $('newTokenLabel').value = '';
+        await refreshProfile();
+      } catch (e) {
+        setConnectedStatus('fail', 'profileFail');
+      }
+    }
+
+    async function revokeToken(id) {
+      try {
+        const res = await fetch(`${profileEndpoint()}/tokens/${id}`, {
+          method: 'DELETE',
+          headers: isConnected() ? authHeaders() : {}
+        });
+        if (!res.ok) throw new Error(`status ${res.status}`);
+        hideNewToken(); // once-only: no stale secret left in the DOM
+        await refreshProfile();
+      } catch (e) {
+        setConnectedStatus('fail', 'profileFail');
+      }
+    }
+
+    function hideNewToken() {
+      $('newTokenBox').style.display = 'none';
+      $('newTokenValue').textContent = '';
+    }
+
+    function copyNewToken() {
+      const value = $('newTokenValue').textContent;
+      if (!value) return;
+      navigator.clipboard.writeText(value).then(() => {
+        const btn = $('copyTokenBtn');
+        const t = t18();
+        btn.textContent = t.copied;
+        setTimeout(() => { btn.textContent = t.copyToken; }, 2000);
+      }).catch(() => {});
+    }
+
+    async function logoutProfile() {
+      try {
+        // same-origin only: logout clears the SaaS cookie, which only exists
+        // when the page IS the SaaS page
+        await fetch('/api/auth/logout', { method: 'POST' });
+      } catch (e) { /* best-effort */ }
+      hideNewToken();
+      $('profileSection').style.display = 'none';
     }
 
     async function refreshFooterMetrics() {

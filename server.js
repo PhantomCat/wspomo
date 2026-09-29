@@ -476,6 +476,108 @@ app.post('/api/auth/dev-mint', async (req, res) => {
   res.json({ ok: true, email: user.email, token }); // token returned for tests/headless convenience
 });
 
+// ---------- profile + API token management (auth part 2, 29.09) ----------
+// Any authenticated principal (web cookie or an existing API token) may
+// inspect the profile and mint/revoke API tokens. The raw token travels to
+// the client exactly once (creation response); the DB keeps its sha256.
+
+// CORS for the connected OSS frontend: profile/token endpoints are same-
+// origin on the SaaS page, but a connected OSS page lists/revokes its tokens
+// cross-origin too (owner decision 29.09: token UI lives on wspomo.work,
+// but the OSS page still shows "who am I" via the connection token).
+app.use('/api/auth/me', corsOpen);
+app.use('/api/auth/tokens', corsOpen);
+app.use('/api/auth/logout', corsOpen);
+
+const MAX_ACTIVE_API_TOKENS = 10;
+
+app.get('/api/auth/me', async (req, res) => {
+  if (!metricsDb) return res.status(404).json({ ok: false, error: 'no_database' });
+  const session = await authRequest(req);
+  if (!session) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const user = await storage.getUser(session.user_id);
+  const sessions = await storage.listSessions(session.user_id, { includeRevoked: false });
+  return res.json({
+    ok: true,
+    email: user ? user.email : null,
+    currentSessionId: session.id,
+    sessionType: session.type,
+    apiTokens: sessions
+      .filter(s => s.type === 'api')
+      .map(s => ({ id: s.id, label: s.label, createdAt: s.created_at }))
+  });
+});
+
+app.post('/api/auth/tokens', async (req, res) => {
+  if (!metricsDb) return res.status(404).json({ ok: false, error: 'no_database' });
+  const session = await authRequest(req);
+  if (!session) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+  const label = (req.body && typeof req.body.label === 'string' ? req.body.label.trim() : '');
+  if (!label || label.length > 50) {
+    return res.status(400).json({ ok: false, error: 'invalid_label' });
+  }
+
+  const active = await storage.listSessions(session.user_id, { includeRevoked: false });
+  const apiCount = active.filter(s => s.type === 'api').length;
+  if (apiCount >= MAX_ACTIVE_API_TOKENS) {
+    return res.status(429).json({ ok: false, error: 'too_many_tokens' });
+  }
+
+  const token = crypto.randomBytes(24).toString('hex');
+  await storage.createSession(session.user_id, 'api', token, { label });
+  return res.json({
+    ok: true,
+    token, // shown exactly once; the DB stores only the sha256
+    hint: 'copy-now-shown-once'
+  });
+});
+
+app.delete('/api/auth/tokens/:id', async (req, res) => {
+  if (!metricsDb) return res.status(404).json({ ok: false, error: 'no_database' });
+  const session = await authRequest(req);
+  if (!session) return res.status(401).json({ ok: false, error: 'unauthorized' });
+
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    return res.status(400).json({ ok: false, error: 'invalid_id' });
+  }
+
+  // only own tokens are revocable — cross-user manipulation would be a
+  // security hole even if the id came from somebody else's traffic
+  const row = await storage.getSession(id);
+  if (!row || row.user_id !== session.user_id || row.type !== 'api') {
+    return res.status(404).json({ ok: false, error: 'not_found' });
+  }
+  if (row.id === session.id) {
+    return res.status(400).json({ ok: false, error: 'cannot_revoke_self' });
+  }
+  await storage.revokeSession(id);
+  return res.json({ ok: true });
+});
+
+app.delete('/api/auth/tokens', async (req, res) => {
+  // bulk: revoke every api token of this user (profile "revoke all")
+  if (!metricsDb) return res.status(404).json({ ok: false, error: 'no_database' });
+  const session = await authRequest(req);
+  if (!session) return res.status(401).json({ ok: false, error: 'unauthorized' });
+  const n = await storage.revokeApiTokens(session.user_id);
+  return res.json({ ok: true, revoked: n });
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  if (!metricsDb) return res.status(404).json({ ok: false, error: 'no_database' });
+  const cookieToken = typeof req.cookies.wspomo_session === 'string' ? req.cookies.wspomo_session : null;
+  if (cookieToken) {
+    const session = await storage.findSessionByToken(cookieToken);
+    if (session && session.type === 'web') {
+      await storage.revokeSession(session.id);
+    }
+  }
+  res.clearCookie(WEB_SESSION_COOKIE, { path: '/' });
+  res.json({ ok: true });
+});
+
 // ---------- settings revision hash (task 28.09, owner request) ----------
 // Connected clients keep a local copy of the per-user settings and watch a
 // short revision hash in every /api/state tick; when it differs, they re-fetch

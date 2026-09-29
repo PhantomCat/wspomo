@@ -156,3 +156,16 @@ test('connected: settings revision sync (server row is the source of truth)', ()
   const probe = html.slice(html.indexOf('function connectedProbe'), html.indexOf('function startSettingsWatch'));
   assert.ok(probe.includes('startSettingsWatch()'), 'armed on fresh connection');
 });
+
+test('profile: UI hidden without a principal, raw token shown once', () => {
+  const section = html.slice(html.indexOf('id="profileSection"'), html.indexOf('<button class="btn-save"'));
+  assert.ok(section.includes('style="display:none"'), 'profile section starts hidden');
+  assert.ok(section.includes('newTokenValue'), 'once-shown token box exists');
+  const js = html.slice(html.indexOf('async function refreshProfile'), html.indexOf('async function refreshFooterMetrics'));
+  assert.ok(js.includes("section.style.display = 'none'"), 'no principal → section stays hidden');
+  assert.ok(js.includes('refreshProfile();') || html.includes('refreshProfile(); // principal'), 'openSettings refreshes the profile');
+  assert.ok(html.includes("$('logoutBtn').addEventListener"), 'logout handler wired');
+  assert.ok(js.includes("'/api/auth/logout'"), 'logout hits the same-origin endpoint only');
+  const revokes = [...html.matchAll(/revoke\.dataset\.tokenId/g)].length;
+  assert.strictEqual(revokes, 1, 'each listed token gets its own revoke button');
+});
