@@ -188,3 +188,21 @@ test('OPTIONS preflight on /api/settings and /api/session', async () => {
     assert.strictEqual(res.headers.get('access-control-allow-origin'), '*', ep);
   }
 });
+
+// ---------- SaaS preseed (task 30.09, variant 1) ----------
+
+test('index.html serves standalone without WSPOMO_SAAS_URL', async () => {
+  // this server booted without the env: the marker stays a plain comment
+  const res = await fetch(`${base}/`);
+  assert.strictEqual(res.status, 200);
+  const body = await res.text();
+  assert.ok(body.includes('<!-- WSPOMO_SAAS_PRESEED -->'), 'marker untouched in OSS mode');
+  // the page's own JS references the global, so test the assignment itself
+  assert.ok(!/<script>window\.WSPOMO_SAAS_URL = /.test(body), 'no preseed injected');
+  assert.strictEqual(res.headers.get('cache-control'), 'no-store');
+});
+
+test('static files keep flowing with index:false', async () => {
+  const res = await fetch(`${base}/js/timer-core.js`);
+  assert.strictEqual(res.status, 200);
+});

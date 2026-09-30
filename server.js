@@ -85,8 +85,33 @@ const COOKIE_OPTS = { maxAge: COOKIE_MAX_AGE, httpOnly: false, sameSite: 'lax', 
 const VISITOR_COOKIE_OPTS = { maxAge: COOKIE_MAX_AGE, httpOnly: true, sameSite: 'lax', path: '/' };
 
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
+
+// ---------- SaaS assembly (KT-1, task 30.09; owner picked variant 1) ----------
+// One codebase: the SaaS build is the OSS build + a preseeded Connection
+// section. WSPOMO_SAAS_URL (server env) tells the page where its own API
+// lives, so a demo/new user lands connected — self-host builds just leave
+// the env out and keep the empty-connection OSS behavior.
+const SAAS_URL = (process.env.WSPOMO_SAAS_URL || '').trim();
+const STATIC_DIR = path.join(__dirname, 'public');
+
+let indexHtmlCache = null;
+function indexHtml() {
+  if (indexHtmlCache === null) {
+    indexHtmlCache = require('fs').readFileSync(path.join(STATIC_DIR, 'index.html'), 'utf8');
+  }
+  if (!SAAS_URL) return indexHtmlCache;
+  const preseed = `<script>window.WSPOMO_SAAS_URL = ${JSON.stringify(SAAS_URL)};</script>`;
+  return indexHtmlCache.replace('<!-- WSPOMO_SAAS_PRESEED -->', preseed);
+}
+
+// / served through the preseed renderer (no-store: the preseed must never be
+// cached into a page it does not belong to); the rest stays static.
+app.get(['/', '/index.html'], (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.send(indexHtml());
+});
+app.use(express.static(STATIC_DIR, { index: false, extensions: ['html'] }));
 
 // CORS for connected frontends (task 22.09): an OSS page served elsewhere
 // polls /api/state and manages /api/session with a Bearer token — browsers

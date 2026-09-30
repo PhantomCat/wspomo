@@ -24,6 +24,7 @@
   <link rel="icon" id="favicon" href="/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="style.css">
   <script src="js/timer-core.js"></script>
+  <!-- WSPOMO_SAAS_PRESEED -->
 </head>
 <body>
   <header class="site-header">
@@ -1549,8 +1550,14 @@
     const CONNECTED_STORE = 'wspomo_connected';
 
     function loadConnectedCreds() {
-      try { return JSON.parse(localStorage.getItem(CONNECTED_STORE)) || { url: '', token: '' }; }
-      catch (e) { return { url: '', token: '' }; }
+      try {
+        const stored = JSON.parse(localStorage.getItem(CONNECTED_STORE));
+        if (stored && stored.url && stored.token) return stored;
+      } catch (e) { /* fall through to the preseed/default */ }
+      // SaaS assembly (30.09): the server preseeds its own URL — a new user
+      // only needs a token. OSS builds have no preseed and stay local.
+      if (window.WSPOMO_SAAS_URL) return { url: window.WSPOMO_SAAS_URL, token: '' };
+      return { url: '', token: '' };
     }
 
     function saveConnectedCreds() {
