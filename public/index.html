@@ -1507,6 +1507,13 @@
       });
     }
 
+    // SaaS assembly until email OTP lands (02.10): no manual connection
+    // config on a SaaS page — the section is a dead end without a way to
+    // mint a token; login replaces it. OSS (no preseed) keeps its fields.
+    if (window.WSPOMO_SAAS_URL && !IS_DEMO) {
+      $('connectedSection').style.display = 'none';
+    }
+
     function updateSyncToggle() {
       $('syncToggle').classList.toggle('active', settings.workdaySync);
     }
