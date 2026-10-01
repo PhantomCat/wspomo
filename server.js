@@ -442,16 +442,7 @@ function isValidTimezone(tzName) {
 }
 
 // Resolve an API token (Bearer header) to a user row; null on any miss.
-// Kept for /api/session's strict Bearer-only contract.
-async function authUser(req) {
-  const token = readBearerToken(req);
-  if (!token || !metricsDb) return null;
-  return storage.findSessionByToken(token);
-}
-
-// Resolve ANY authenticated principal (auth skeleton, 29.09): Bearer API
-// token first, then the web session cookie. Returns the sessions row or
-// null. Single funnel — endpoints stop hand-rolling token lookups.
+// (Bearer-only helper removed 01.10: /api/session now accepts any principal.)
 async function authRequest(req) {
   if (!metricsDb) return null;
 
@@ -624,9 +615,10 @@ function settingsRevision(data, updatedAt) {
 // Marks the user's timer chain active/inactive in the DB. Replay in
 // GET /api/state then serves headless clients (waybar/TUI) without a browser.
 app.post('/api/session', async (req, res) => {
-  // Bearer-only by design: a web session cookie on a shared browser must not
-  // silently activate the user's headless schedule chain.
-  const user = await authUser(req);
+  // Rule refined with the owner (01.10): any authenticated principal may
+  // drive the chain — on the SaaS the web page is cookie-authenticated and
+  // must be able to run workdaySync; headless clients keep the API token.
+  const user = await authRequest(req);
   if (!user) {
     return res.status(401).json({ ok: false, error: 'unauthorized' });
   }

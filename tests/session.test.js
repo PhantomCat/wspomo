@@ -317,13 +317,21 @@ test('web session: mint → cookie → settings go to the per-user row', { skip:
     const st = await fetch(`${base}/api/state`, { headers: { cookie: cookiePair } });
     assert.strictEqual((await st.json()).auth, 'recognized');
 
-    // Bearer-only contract on /api/session: the web cookie must NOT drive it
-    const chained = await fetch(`${base}/api/session`, {
+    // Cookie drives the chain (rule refined with the owner, 01.10): the
+    // SaaS page authenticates by cookie and must be able to run workdaySync;
+    // headless clients keep the API token. Chain started by cookie, then
+    // visible via Bearer replay too.
+    const byCookie = await fetch(`${base}/api/session`, {
       method: 'POST',
       headers: { 'content-type': 'application/json', cookie: cookiePair },
       body: JSON.stringify({ action: 'start', mode: 'synced' })
     });
-    assert.strictEqual(chained.status, 401, 'web cookie must not start headless chains');
+    const byCookieData = await byCookie.json();
+    assert.strictEqual(byCookie.status, 200, 'web cookie drives the user chain (01.10)');
+    assert.strictEqual(byCookieData.active, true);
+    const replay = await fetch(`${base}/api/state`, { headers: { cookie: cookiePair } });
+    assert.strictEqual((await replay.json()).auth, 'recognized');
+    await storage.stopActiveSession((await storage.findSessionByToken(token)).user_id);
   } finally {
     process.env.WSPOMO_DEV_AUTH = prev;
     await storage.pool.query("DELETE FROM users WHERE email LIKE 'cookie-%'");
