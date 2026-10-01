@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>wspomo — a Pomodoro timer anchored to your work schedule</title>
+  <meta name="description" content="wspomo is a pomodoro timer for people who work to a schedule: your 9-to-5 and lunch define the defaults, pomodoros count toward short breaks, and your timer keeps working with the browser closed (workday sync). Self-host it or use it free.">
+  <meta property="og:title" content="wspomo — a Pomodoro timer anchored to your work schedule">
+  <meta property="og:description" content="Set your workday once — the timer does the rounds. Workday-anchored pomodoros, server-side sync across devices, audit-friendly uptime for waybar/TUI. Free, open source, self-hostable.">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://wspomo.work/welcome">
+  <link rel="canonical" href="https://wspomo.work/welcome">
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <style>
+    :root {
+      --bg: #1e1e2e;
+      --surface: #313244;
+      --border: #45475a;
+      --text: #cdd6f4;
+      --muted: #a6adc8;
+      --accent: #74c7ec;
+      --green: #a6e3a1;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 2rem 1rem;
+    }
+    main { max-width: 44rem; margin: 0 auto; }
+    h1 { font-size: 1.9rem; line-height: 1.25; margin-bottom: 0.5rem; }
+    h1 .accent { color: var(--accent); }
+    .tagline { color: var(--muted); font-size: 1.05rem; margin-bottom: 2rem; }
+    h2 { font-size: 1.15rem; margin: 1.8rem 0 0.5rem; }
+    ul { margin: 0.5rem 0 0.5rem 1.3rem; }
+    li { margin-bottom: 0.4rem; }
+    a { color: var(--accent); }
+    .cards { display: grid; gap: 1rem; grid-template-columns: 1fr 1fr; margin: 1.5rem 0; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem 1.2rem;
+    }
+    .card h3 { font-size: 1rem; margin-bottom: 0.3rem; }
+    .card p { color: var(--muted); font-size: 0.9rem; }
+    .cta-row { display: flex; gap: 1rem; flex-wrap: wrap; margin: 2rem 0; }
+    .btn {
+      display: inline-block;
+      padding: 0.65rem 1.3rem;
+      border-radius: 8px;
+      text-decoration: none;
+      font-weight: 600;
+    }
+    .btn-primary { background: var(--accent); color: #11111b; }
+    .btn-ghost { border: 1px solid var(--border); color: var(--text); }
+    .note { color: var(--muted); font-size: 0.85rem; margin-top: 2.5rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+    @media (max-width: 560px) { .cards { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>A Pomodoro timer <span class="accent">anchored to your work schedule</span></h1>
+    <p class="tagline">Most pomodoro apps start when you click Start. wspomo starts when your working day does — set your schedule once, and the day organizes itself.</p>
+
+    <p>Define your 9-to-5 (or 8-to-4, or shift start) and lunch once. From then on, pomodoro sessions run <em>against your workday</em>: pomodoros accumulate toward short breaks, the long break comes after the session counter you set, and the remaining minutes count down to your schedule, not to a random stopwatch.</p>
+
+    <h2>What makes it different</h2>
+    <ul>
+      <li><strong>Schedule-anchored pomodoros.</strong> Sessions sync to your workday start, lunch and end — staying consistent with real overtime and coffee interruptions.</li>
+      <li><strong>Workday sync (optional, server-side).</strong> The day's chain lives on the server and keeps ticking even with the browser closed — the count-down shown on the site is the same time your waybar module or TUI client shows on another machine.</li>
+      <li><strong>Multiple client frontends.</strong> A web page, a waybar plugin and a terminal client can all follow the same server-workday schedule in real time.</li>
+      <li><strong>Yours to run.</strong> GPLv3, single Docker image, one PostgreSQL. Point it at your own work schedule and stay in full control of your data.</li>
+    </ul>
+
+    <div class="cards">
+      <div class="card">
+        <h3>Use it as a local timer</h3>
+        <p>Everything runs in your browser. No signup, no data leaving your device unless you choose otherwise.</p>
+      </div>
+      <div class="card">
+        <h3>Self-host it in one YAML</h3>
+        <p>Docker compose: app, Postgres, Caddy. Schedule settings live per user; API tokens power headless clients like waybar and terminal.</p>
+      </div>
+    </div>
+
+    <div class="cta-row">
+      <a class="btn btn-primary" href="/">Open the timer</a>
+      <a class="btn btn-ghost" href="/welcome#setup">Self-host setup</a>
+    </div>
+
+    <h2 id="setup">Self-host in three steps</h2>
+    <ul>
+      <li>Clone <a href="https://github.com/PhantomCat/wspomo">the repository</a> (GPLv3),</li>
+      <li><code>docker compose up</code> with its own Postgres and Caddy,</li>
+      <li>point your domain at it and set your workday in the timer settings.</li>
+    </ul>
+
+    <p class="note">
+      Read the <a href="/PRIVACY.md">privacy note</a> — nothing is collected about you beyond an anonymous visit counter.
+      Source code: <a href="https://github.com/PhantomCat/wspomo">github.com/PhantomCat/wspomo</a>.
+      This site is <a href="https://wspomo.work">wspomo.work</a>; a demo of the connected mode lives at <a href="https://demo.wspomo.work">demo.wspomo.work</a>.
+    </p>
+  </main>
+</body>
+</html>
