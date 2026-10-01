@@ -653,6 +653,27 @@ body {
 .connected-status.ok { color: var(--ctp-green); }
 .connected-status.fail { color: var(--ctp-red); }
 
+/* Demo tooltip (30.09): pops next to the dummy URL/token fields */
+.field-tip {
+  position: fixed;
+  z-index: 60;
+  max-width: 17rem;
+  padding: 0.6rem 0.7rem;
+  background: var(--ctp-surface0);
+  border: 1px solid var(--ctp-surface2);
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  color: var(--ctp-subtext1);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.field-tip-links {
+  margin-top: 0.4rem;
+  display: flex;
+  gap: 1rem;
+}
+.field-tip-links a { color: var(--ctp-blue); }
+
+
 /* Server chains step on schedule — manual skip would fight the server */
 body.connected #skipBtn { display: none; }
 

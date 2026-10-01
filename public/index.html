@@ -160,6 +160,13 @@
           <strong data-i18n="connectedHowTitle">Как работает:</strong> <span data-i18n="connectedHowText">Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера даже с закрытым браузером.</span>
         </div>
         <div class="connected-status" id="connectedStatus"></div>
+        <div class="field-tip" id="demoTip" hidden>
+          <div class="field-tip-text" id="demoTipText"></div>
+          <div class="field-tip-links">
+            <a href="https://wspomo.work" target="_blank" rel="noopener" id="demoTipSaas">SaaS ↗</a>
+            <a href="https://github.com/PhantomCat/wspomo" target="_blank" rel="noopener" id="demoTipSelfhost">Self-hosted ↗</a>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -306,6 +313,8 @@
         connectedFail: 'Сервер не отвечает или токен неверный',
         connectedHowTitle: 'Как работает:',
         connectedHowText: 'Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера, даже когда браузер закрыт.',
+        demoStatus: 'Демо-режим: таймер и настройки живут только в этом браузере (24 ч)',
+        demoTooltip: 'Это демо: данные хранятся только в вашем браузере и исчезают через 24 часа. Полная версия:',
         profileSection: 'Профиль',
         mintToken: 'Создать токен',
         tokenOnceTitle: 'Токен показывается один раз:',
@@ -372,6 +381,8 @@
         connectedFail: 'Server unreachable or token invalid',
         connectedHowTitle: 'How it works:',
         connectedHowText: 'Empty — the timer lives in this browser. SaaS URL + token — the tick comes from the server, even with the browser closed.',
+        demoStatus: 'Demo mode: the timer and settings live only in this browser (24 h)',
+        demoTooltip: 'This is a demo: data lives in your browser only and disappears after 24 hours. Full version:',
         profileSection: 'Profile',
         mintToken: 'Create token',
         tokenOnceTitle: 'The token is shown once:',
@@ -429,6 +440,18 @@
     };
 
     const $ = id => document.getElementById(id);
+
+    // ---------- demo mode flags (30.09, owner decision) ----------
+    // Declared at the top: listeners below read IS_DEMO during boot, and a
+    // `const` later in the script would throw a TDZ ReferenceError.
+    // The demo stack preseeds WSPOMO_DEMO: URL/token fields show dummy
+    // values, clicking them explains the demo and points to SaaS/self-host.
+    // Everything the demo visitor does lives ONLY in this browser with a
+    // 24 h TTL — no server row, no real credentials, nothing to mint.
+    const IS_DEMO = window.WSPOMO_DEMO === true;
+    const DEMO_TTL_MS = 24 * 60 * 60 * 1000;
+    const DEMO_STORE = 'wspomo_demo';
+    const DEMO_DUMMY = { url: 'demo.wspomo.work', token: 'demo' };
 
     function applyLanguage() {
       const t = translations[settings.language] || translations.ru;
@@ -1085,6 +1108,13 @@
     }
 
     async function loadSettings() {
+      if (IS_DEMO) {
+        // demo: settings live only in the browser (24 h TTL store)
+        const stored = demoStore();
+        if (stored && stored.settings) settings = { ...settings, ...stored.settings };
+        applySettings();
+        return settings;
+      }
       try {
         const res = await fetch(settingsEndpoint(), isConnected() ? { headers: authHeaders() } : {});
         const data = await res.json();
@@ -1200,14 +1230,20 @@
       if (!saveConnectedInputs()) return;
 
       try {
-        const res = await fetch(settingsEndpoint(), {
-          method: 'POST',
-          headers: settingsPostHeaders(),
-          body: JSON.stringify(newSettings)
-        });
-        const data = await res.json();
-        if (typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
-        settings = newSettings;
+        if (IS_DEMO) {
+          // demo: settings never leave this browser (24 h TTL store)
+          settings = newSettings;
+          saveDemoStore({ settings });
+        } else {
+          const res = await fetch(settingsEndpoint(), {
+            method: 'POST',
+            headers: settingsPostHeaders(),
+            body: JSON.stringify(newSettings)
+          });
+          const data = await res.json();
+          if (typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
+          settings = newSettings;
+        }
 
         if (!state.running) {
           state.timeLeft = getDuration(state.mode);
@@ -1347,6 +1383,7 @@
     }
 
     function saveConnectedInputs() {
+      if (IS_DEMO) return true; // dummy inputs, nothing to connect on demo
       const urlInput = $('connectedUrl');
       const tokenInput = $('connectedToken');
       const url = normalizeServerUrl(urlInput.value);
@@ -1371,8 +1408,17 @@
     }
 
     function openSettings() {
-      $('connectedUrl').value = connectedCreds.url || '';
-      $('connectedToken').value = connectedCreds.token || '';
+      if (IS_DEMO) {
+        // demo: dummy credentials, read-only, a click explains the demo
+        $('connectedUrl').value = DEMO_DUMMY.url;
+        $('connectedToken').value = DEMO_DUMMY.token;
+        $('connectedUrl').readOnly = true;
+        $('connectedToken').readOnly = true;
+      } else {
+        $('connectedUrl').value = connectedCreds.url || '';
+        $('connectedToken').value = connectedCreds.token || '';
+      }
+      hideDemoTip();
       hideNewToken(); // once-only: a shown secret never survives reopen
       $('settingsPanel').classList.add('open');
       $('settingsOverlay').classList.add('open');
@@ -1381,8 +1427,33 @@
 
     function closeSettings() {
       hideNewToken();
+      hideDemoTip();
       $('settingsPanel').classList.remove('open');
       $('settingsOverlay').classList.remove('open');
+    }
+
+    // demo tooltip (30.09): a click on the dummy URL/token explains the demo
+    // and offers SaaS or self-host instead of doing anything to the fields
+    function showDemoTip(id) {
+      const tip = $('demoTip');
+      if (!tip) return;
+      const t = translations[settings.language] || translations.ru;
+      $('demoTipText').textContent = t.demoTooltip || '';
+      const rect = $(id).getBoundingClientRect();
+      tip.hidden = false;
+      const tipRect = tip.getBoundingClientRect(); // measure after unhide
+      // below the field, right-aligned; flip above if it would overflow the viewport
+      let top = rect.bottom + 8;
+      if (top + tipRect.height > window.innerHeight - 8) top = rect.top - tipRect.height - 8;
+      tip.style.top = `${Math.max(8, top)}px`;
+      let left = rect.right - tipRect.width;
+      if (left < 8) left = 8;
+      tip.style.left = `${left}px`;
+    }
+
+    function hideDemoTip() {
+      const tip = $('demoTip');
+      if (tip) tip.hidden = true;
     }
 
     document.querySelectorAll('.mode-tab').forEach(tab => {
@@ -1403,11 +1474,7 @@
       clearInterval(state.intervalId);
       state.running = false;
       connected.lastMode = null;
-      fetch(settingsEndpoint(), {
-        method: 'POST',
-        headers: settingsPostHeaders(),
-        body: JSON.stringify(settings)
-      }).catch(() => {});
+      persistSettingsSnapshot();
       switchMode('work');
       updateDisplay();
       sendActiveReport();
@@ -1424,6 +1491,18 @@
 
     $('lunchEnabled').addEventListener('change', toggleLunchFields);
 
+    // demo: the dummy connection fields explain, not configure
+    if (IS_DEMO) {
+      $('connectedUrl').addEventListener('click', () => showDemoTip('connectedUrl'));
+      $('connectedToken').addEventListener('click', () => showDemoTip('connectedToken'));
+      setConnectedStatus('', 'demoStatus');
+      document.addEventListener('click', (e) => {
+        if (!$('demoTip').contains(e.target) && e.target !== $('connectedUrl') && e.target !== $('connectedToken')) {
+          hideDemoTip();
+        }
+      });
+    }
+
     function updateSyncToggle() {
       $('syncToggle').classList.toggle('active', settings.workdaySync);
     }
@@ -1438,11 +1517,7 @@
     function toggleTheme() {
       settings.theme = settings.theme === 'latte' ? 'mocha' : 'latte';
       applyTheme();
-      fetch(settingsEndpoint(), {
-        method: 'POST',
-        headers: settingsPostHeaders(),
-        body: JSON.stringify(settings)
-      }).catch(() => {});
+      persistSettingsSnapshot();
     }
 
     $('themeToggle').addEventListener('click', toggleTheme);
@@ -1462,11 +1537,7 @@
         else if (connected.intervalId || connected.mirrorId) stopConnectedPoll();
         sendActiveReport();
       }
-      fetch(settingsEndpoint(), {
-        method: 'POST',
-        headers: settingsPostHeaders(),
-        body: JSON.stringify(settings)
-      }).catch(() => {});
+      persistSettingsSnapshot();
     }
 
     $('syncToggle').addEventListener('click', toggleSync);
@@ -1480,11 +1551,7 @@
       btn.addEventListener('click', () => {
         settings.language = btn.dataset.lang;
         applyLanguage();
-        fetch(settingsEndpoint(), {
-          method: 'POST',
-          headers: settingsPostHeaders(),
-          body: JSON.stringify(settings)
-        }).catch(() => {});
+        persistSettingsSnapshot();
       });
     });
 
@@ -1549,7 +1616,37 @@
 
     const CONNECTED_STORE = 'wspomo_connected';
 
+    function demoStore() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(DEMO_STORE));
+        if (stored && typeof stored.savedAt === 'number' && Date.now() - stored.savedAt < DEMO_TTL_MS) {
+          return stored;
+        }
+      } catch (e) { /* expired or corrupt → fresh demo */ }
+      try { localStorage.removeItem(DEMO_STORE); } catch (e) {}
+      return null;
+    }
+
+    function saveDemoStore(data) {
+      try {
+        const kept = demoStore();
+        localStorage.setItem(DEMO_STORE, JSON.stringify({
+          ...kept, ...data, savedAt: (kept && kept.savedAt) || Date.now()
+        }));
+      } catch (e) {}
+    }
+
+    function persistSettingsSnapshot() {
+      if (IS_DEMO) { saveDemoStore({ settings }); return; }
+      fetch(settingsEndpoint(), {
+        method: 'POST',
+        headers: settingsPostHeaders(),
+        body: JSON.stringify(settings)
+      }).catch(() => {});
+    }
+
     function loadConnectedCreds() {
+      if (IS_DEMO) return { url: '', token: '' }; // demo is browser-local: no real connection
       try {
         const stored = JSON.parse(localStorage.getItem(CONNECTED_STORE));
         if (stored && stored.url && stored.token) return stored;
@@ -1561,6 +1658,7 @@
     }
 
     function saveConnectedCreds() {
+      if (IS_DEMO) return; // demo never stores connection credentials
       try { localStorage.setItem(CONNECTED_STORE, JSON.stringify(connectedCreds)); } catch (e) {}
     }
 

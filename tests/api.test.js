@@ -7,6 +7,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert');
+const path = require('node:path');
 // file-backed path (storage has its own tests against a live database)
 delete process.env.DATABASE_URL;
 
@@ -206,3 +207,24 @@ test('static files keep flowing with index:false', async () => {
   const res = await fetch(`${base}/js/timer-core.js`);
   assert.strictEqual(res.status, 200);
 });
+
+test('demo stack preseeds WSPOMO_DEMO alongside the SaaS URL', async () => {
+  // demo flag is read at module load → child process with its own env
+  const { spawnSync } = require('node:child_process');
+  const out = spawnSync(process.execPath, ['-e', `
+    const { app } = require('./server.js');
+    app.listen(3299, '127.0.0.1', async () => {
+      let body = '';
+      for (let i = 0; i < 10; i++) {
+        await new Promise(r => setTimeout(r, 100));
+        try {
+          body = await (await fetch('http://127.0.0.1:3299/')).text();
+          break;
+        } catch (e) { /* still warming up */ }
+      }
+      console.log(body.includes('window.WSPOMO_DEMO = true') ? 'DEMO' : 'PLAIN');
+      process.exit(0);
+    });
+  `], { env: { ...process.env, WSPOMO_SAAS_URL: 'https://demo.test', WSPOMO_DEMO: '1' }, cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 20000 });
+  assert.ok(out.stdout.includes('DEMO'), `expected demo preseed, got: ${out.stdout} ${out.stderr}`);
+}, { skip: false });

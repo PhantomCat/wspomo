@@ -93,6 +93,7 @@ app.use(express.json());
 // lives, so a demo/new user lands connected — self-host builds just leave
 // the env out and keep the empty-connection OSS behavior.
 const SAAS_URL = (process.env.WSPOMO_SAAS_URL || '').trim();
+const DEMO_MODE = process.env.WSPOMO_DEMO === '1';
 const STATIC_DIR = path.join(__dirname, 'public');
 
 let indexHtmlCache = null;
@@ -100,8 +101,13 @@ function indexHtml() {
   if (indexHtmlCache === null) {
     indexHtmlCache = require('fs').readFileSync(path.join(STATIC_DIR, 'index.html'), 'utf8');
   }
-  if (!SAAS_URL) return indexHtmlCache;
-  const preseed = `<script>window.WSPOMO_SAAS_URL = ${JSON.stringify(SAAS_URL)};</script>`;
+  if (!SAAS_URL && !DEMO_MODE) return indexHtmlCache;
+  // demo stack (30.09): dummy credentials + browser-only persistence, the
+  // page never talks to the API on behalf of the visitor
+  const preseed = `<script>${[
+    SAAS_URL ? `window.WSPOMO_SAAS_URL = ${JSON.stringify(SAAS_URL)}` : null,
+    DEMO_MODE ? 'window.WSPOMO_DEMO = true' : null
+  ].filter(Boolean).join('; ')};</script>`;
   return indexHtmlCache.replace('<!-- WSPOMO_SAAS_PRESEED -->', preseed);
 }
 
