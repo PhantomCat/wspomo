@@ -2089,9 +2089,9 @@
     }
 
     loadSettings().then(() => {
-      if (settings.browserNotification && 'Notification' in window && Notification.permission === 'default') {
-        Notification.requestPermission();
-      }
+      // notification permission is requested only from a user gesture
+      // (the checkbox handler does it); a boot-time request throws in
+      // Firefox ("not inside a short running user-generated event handler")
       // reconnect silently if creds are stored (page reload, laptop wake).
       // W on → the server chain is authoritative; W off → free-form lives in
       // the browser, poll stays down until W is switched back on.
