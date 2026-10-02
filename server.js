@@ -87,13 +87,12 @@ const VISITOR_COOKIE_OPTS = { maxAge: COOKIE_MAX_AGE, httpOnly: true, sameSite: 
 app.use(cookieParser());
 app.use(express.json());
 
-// ---------- SaaS assembly (KT-1, task 30.09; owner picked variant 1) ----------
-// One codebase: the SaaS build is the OSS build + a preseeded Connection
-// section. WSPOMO_SAAS_URL (server env) tells the page where its own API
-// lives, so a demo/new user lands connected — self-host builds just leave
-// the env out and keep the empty-connection OSS behavior.
-const SAAS_URL = (process.env.WSPOMO_SAAS_URL || '').trim();
-const DEMO_MODE = process.env.WSPOMO_DEMO === '1';
+// ---------- SaaS gate (owner decision, 02.10) ----------
+// One codebase, no OSS/SaaS source split. SAAS_ENABLED=1 (deployment env,
+// documented internally only) unlocks the server side: auth elements, the
+// full API, server-driven chains. The default OSS build runs the timer,
+// keeps settings in the browser and answers only status/telemetry endpoints.
+const SAAS = process.env.SAAS_ENABLED === '1';
 const STATIC_DIR = path.join(__dirname, 'public');
 
 let indexHtmlCache = null;
@@ -101,14 +100,13 @@ function indexHtml() {
   if (indexHtmlCache === null) {
     indexHtmlCache = require('fs').readFileSync(path.join(STATIC_DIR, 'index.html'), 'utf8');
   }
-  if (!SAAS_URL && !DEMO_MODE) return indexHtmlCache;
-  // demo stack (30.09): dummy credentials + browser-only persistence, the
-  // page never talks to the API on behalf of the visitor
-  const preseed = `<script>${[
-    SAAS_URL ? `window.WSPOMO_SAAS_URL = ${JSON.stringify(SAAS_URL)}` : null,
-    DEMO_MODE ? 'window.WSPOMO_DEMO = true' : null
-  ].filter(Boolean).join('; ')};</script>`;
-  return indexHtmlCache.replace('<!-- WSPOMO_SAAS_PRESEED -->', preseed);
+  if (!SAAS) return indexHtmlCache;
+  // injected at boot for the SaaS deployment only: the page learns whether
+  // server-side features (auth panel, server chains, full API) exist here
+  return indexHtmlCache.replace(
+    '<!-- WSPOMO_SAAS_PRESEED -->',
+    '<script>window.WSPOMO_SAAS = true;</script>'
+  );
 }
 
 // / served through the preseed renderer (no-store: the preseed must never be
@@ -134,6 +132,14 @@ function corsOpen(req, res, next) {
   next();
 }
 app.use('/api/state', corsOpen);
+if (!SAAS) {
+  // OSS gate (owner decision, 02.10): no backend features outside the SaaS
+  // deployment — settings/session/auth endpoints do not exist here (only
+  // status + telemetry answer). Self-host = timer page in the browser.
+  app.use('/api/settings', (req, res) => res.status(404).json({ ok: false, error: 'saas_required' }));
+  app.use('/api/session', (req, res) => res.status(404).json({ ok: false, error: 'saas_required' }));
+  app.use('/api/auth', (req, res) => res.status(404).json({ ok: false, error: 'saas_required' }));
+}
 app.use('/api/session', corsOpen);
 app.use('/api/settings', corsOpen);
 
@@ -707,6 +713,12 @@ function getDefaultSettings() {
     timezone: null // browser fills via Intl on first save
   };
 }
+
+// JSON 404 for unknown /api paths (the auth panel points at OTP endpoints
+// landing 03.10 — the panel must fall back gracefully, not get HTML errors)
+app.use('/api', (req, res) => {
+  return res.status(404).json({ ok: false, error: 'not_found' });
+});
 
 if (require.main === module) {
   app.listen(PORT, '0.0.0.0', () => {

@@ -149,28 +149,20 @@
       </div>
     </div>
 
-    <div class="settings-section" id="connectedSection">
-      <h3 id="connectedSectionTitle">Подключение</h3>
+    <div class="settings-section" id="authSection" style="display:none">
+      <h3 id="authSectionTitle">Вход</h3>
       <div class="connected-box">
         <div class="setting-row">
-          <label data-i18n="serverUrl">Адрес сервера</label>
-          <input type="text" id="connectedUrl" class="connected-input" placeholder="пусто = локально" spellcheck="false" autocomplete="off">
+          <label data-i18n="loginEmail">Email</label>
+          <input type="email" id="loginEmail" class="connected-input" autocomplete="email" spellcheck="false">
         </div>
-        <div class="setting-row">
-          <label data-i18n="apiToken">API-токен</label>
-          <input type="password" id="connectedToken" class="connected-input" placeholder="" spellcheck="false" autocomplete="off">
+        <button class="btn-mint" id="requestCodeBtn" data-i18n="requestCode">Получить код</button>
+        <div class="setting-row" id="loginCodeRow" style="display:none">
+          <label data-i18n="loginCode">Код из письма</label>
+          <input type="text" id="loginCode" class="connected-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
         </div>
-        <div class="sync-info" id="connectedInfo">
-          <strong data-i18n="connectedHowTitle">Как работает:</strong> <span data-i18n="connectedHowText">Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера даже с закрытым браузером.</span>
-        </div>
-        <div class="connected-status" id="connectedStatus"></div>
-        <div class="field-tip" id="demoTip" hidden>
-          <div class="field-tip-text" id="demoTipText"></div>
-          <div class="field-tip-links">
-            <a href="https://wspomo.work" target="_blank" rel="noopener" id="demoTipSaas">SaaS ↗</a>
-            <a href="https://github.com/PhantomCat/wspomo" target="_blank" rel="noopener" id="demoTipSelfhost">Self-hosted ↗</a>
-          </div>
-        </div>
+        <button class="btn-mint" id="verifyBtn" style="display:none" data-i18n="verify">Войти</button>
+        <div class="connected-status" id="authStatus"></div>
       </div>
     </div>
 
@@ -317,8 +309,16 @@
         connectedFail: 'Сервер не отвечает или токен неверный',
         connectedHowTitle: 'Как работает:',
         connectedHowText: 'Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера, даже когда браузер закрыт.',
-        demoStatus: 'Демо-режим: таймер и настройки живут только в этом браузере (24 ч)',
-        demoTooltip: 'Это демо: данные хранятся только в вашем браузере и исчезают через 24 часа. Полная версия:',
+        loginSection: 'Вход',
+        loginEmail: 'Email',
+        loginEmailPlaceholder: 'you@example.com',
+        requestCode: 'Получить код',
+        loginCode: 'Код из письма',
+        verify: 'Войти',
+        loginSent: 'Код отправлен на',
+        loginBadCode: 'Неверный или просроченный код',
+        loginSoon: 'Вход по email откроется позже (сервис в запуске)',
+        loginTryAgain: 'Попробуйте ещё раз',
         profileSection: 'Профиль',
         mintToken: 'Создать токен',
         tokenOnceTitle: 'Токен показывается один раз:',
@@ -385,8 +385,16 @@
         connectedFail: 'Server unreachable or token invalid',
         connectedHowTitle: 'How it works:',
         connectedHowText: 'Empty — the timer lives in this browser. SaaS URL + token — the tick comes from the server, even with the browser closed.',
-        demoStatus: 'Demo mode: the timer and settings live only in this browser (24 h)',
-        demoTooltip: 'This is a demo: data lives in your browser only and disappears after 24 hours. Full version:',
+        loginSection: 'Sign in',
+        loginEmail: 'Email',
+        loginEmailPlaceholder: 'you@example.com',
+        requestCode: 'Get the code',
+        loginCode: 'Code from the email',
+        verify: 'Sign in',
+        loginSent: 'Code sent to',
+        loginBadCode: 'Wrong or expired code',
+        loginSoon: 'Email sign-in opens later (service is launching)',
+        loginTryAgain: 'Try again',
         profileSection: 'Profile',
         mintToken: 'Create token',
         tokenOnceTitle: 'The token is shown once:',
@@ -445,17 +453,32 @@
 
     const $ = id => document.getElementById(id);
 
-    // ---------- demo mode flags (30.09, owner decision) ----------
-    // Declared at the top: listeners below read IS_DEMO during boot, and a
+    // ---------- deployment gate (owner decision, 02.10) ----------
+    // Declared at the top: listeners below read SAAS during boot, and a
     // `const` later in the script would throw a TDZ ReferenceError.
-    // The demo stack preseeds WSPOMO_DEMO: URL/token fields show dummy
-    // values, clicking them explains the demo and points to SaaS/self-host.
-    // Everything the demo visitor does lives ONLY in this browser with a
-    // 24 h TTL — no server row, no real credentials, nothing to mint.
-    const IS_DEMO = window.WSPOMO_DEMO === true;
-    const DEMO_TTL_MS = 24 * 60 * 60 * 1000;
-    const DEMO_STORE = 'wspomo_demo';
-    const DEMO_DUMMY = { url: 'demo.wspomo.work', token: 'demo' };
+    // The SaaS deployment preseeds WSPOMO_SAAS: the page gains the auth
+    // panel, server-driven chains and the full API. The plain OSS build
+    // (no preseed) is browser-only: timer lives in this page, settings
+    // persist in the browser store (long-lived, owner's specification) —
+    // and the server answers only status/telemetry endpoints.
+    const SAAS = window.WSPOMO_SAAS === true;
+    const LOCAL_SETTINGS_STORE = 'wspomo_settings';
+
+    function loadLocalSettings() {
+      try {
+        const stored = JSON.parse(localStorage.getItem(LOCAL_SETTINGS_STORE));
+        if (stored && stored.savedAt) return stored;
+      } catch (e) { /* fresh browser */ }
+      return null;
+    }
+
+    function saveLocalSettings() {
+      try {
+        localStorage.setItem(LOCAL_SETTINGS_STORE, JSON.stringify({
+          ...settings, savedAt: Date.now()
+        }));
+      } catch (e) {}
+    }
 
     function applyLanguage() {
       const t = translations[settings.language] || translations.ru;
@@ -476,6 +499,10 @@
       $('notifSectionTitle').textContent = t.notifications;
       const connectedTitle = $('connectedSectionTitle');
       if (connectedTitle) connectedTitle.textContent = t.connectedSection;
+      const authTitle = $('authSectionTitle');
+      if (authTitle) authTitle.textContent = t.loginSection || t.connectedSection;
+      const loginEmail = $('loginEmail');
+      if (loginEmail && t.loginEmailPlaceholder) loginEmail.placeholder = t.loginEmailPlaceholder;
       const profileTitle = $('profileSectionTitle');
       if (profileTitle) profileTitle.textContent = t.profileSection;
 
@@ -1112,10 +1139,10 @@
     }
 
     async function loadSettings() {
-      if (IS_DEMO) {
-        // demo: settings live only in the browser (24 h TTL store)
-        const stored = demoStore();
-        if (stored && stored.settings) settings = { ...settings, ...stored.settings };
+      if (!SAAS) {
+        // OSS: settings live in the browser store (long-lived)
+        const stored = loadLocalSettings();
+        if (stored) settings = { ...settings, ...stored.settings };
         applySettings();
         return settings;
       }
@@ -1231,23 +1258,30 @@
         }
       }
 
-      if (!saveConnectedInputs()) return;
+      if (!SAAS) {
+        // OSS: settings live in this browser only (long-lived browser store)
+        settings = newSettings;
+        saveLocalSettings();
+        if (!state.running) {
+          state.timeLeft = getDuration(state.mode);
+          state.totalTime = getDuration(state.mode);
+          updateDisplay();
+        }
+        updateSessionDots();
+        $('settingsPanel').classList.remove('open');
+        $('settingsOverlay').classList.remove('open');
+        return;
+      }
 
       try {
-        if (IS_DEMO) {
-          // demo: settings never leave this browser (24 h TTL store)
-          settings = newSettings;
-          saveDemoStore({ settings });
-        } else {
-          const res = await fetch(settingsEndpoint(), {
-            method: 'POST',
-            headers: settingsPostHeaders(),
-            body: JSON.stringify(newSettings)
-          });
-          const data = await res.json();
-          if (typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
-          settings = newSettings;
-        }
+        const res = await fetch(settingsEndpoint(), {
+          method: 'POST',
+          headers: settingsPostHeaders(),
+          body: JSON.stringify(newSettings)
+        });
+        const data = await res.json();
+        if (typeof data.settingsRev === 'string') connected.settingsRev = data.settingsRev;
+        settings = newSettings;
 
         if (!state.running) {
           state.timeLeft = getDuration(state.mode);
@@ -1386,43 +1420,7 @@
       updateTitle();
     }
 
-    function saveConnectedInputs() {
-      if (IS_DEMO) return true; // dummy inputs, nothing to connect on demo
-      const urlInput = $('connectedUrl');
-      const tokenInput = $('connectedToken');
-      const url = normalizeServerUrl(urlInput.value);
-      const token = tokenInput.value.trim();
-      const t = translations[settings.language] || translations.ru;
-
-      if (url && !token) {
-        tokenInput.classList.add('invalid');
-        return false;
-      }
-      tokenInput.classList.remove('invalid');
-
-      if (url && token) {
-        connectedCreds = { url, token };
-        saveConnectedCreds();
-        setConnectedUI();
-        connectedProbe();
-      } else if (isConnected()) {
-        disconnectConnected();
-      }
-      return true;
-    }
-
     function openSettings() {
-      if (IS_DEMO) {
-        // demo: dummy credentials, read-only, a click explains the demo
-        $('connectedUrl').value = DEMO_DUMMY.url;
-        $('connectedToken').value = DEMO_DUMMY.token;
-        $('connectedUrl').readOnly = true;
-        $('connectedToken').readOnly = true;
-      } else {
-        $('connectedUrl').value = connectedCreds.url || '';
-        $('connectedToken').value = connectedCreds.token || '';
-      }
-      hideDemoTip();
       hideNewToken(); // once-only: a shown secret never survives reopen
       $('settingsPanel').classList.add('open');
       $('settingsOverlay').classList.add('open');
@@ -1431,33 +1429,8 @@
 
     function closeSettings() {
       hideNewToken();
-      hideDemoTip();
       $('settingsPanel').classList.remove('open');
       $('settingsOverlay').classList.remove('open');
-    }
-
-    // demo tooltip (30.09): a click on the dummy URL/token explains the demo
-    // and offers SaaS or self-host instead of doing anything to the fields
-    function showDemoTip(id) {
-      const tip = $('demoTip');
-      if (!tip) return;
-      const t = translations[settings.language] || translations.ru;
-      $('demoTipText').textContent = t.demoTooltip || '';
-      const rect = $(id).getBoundingClientRect();
-      tip.hidden = false;
-      const tipRect = tip.getBoundingClientRect(); // measure after unhide
-      // below the field, right-aligned; flip above if it would overflow the viewport
-      let top = rect.bottom + 8;
-      if (top + tipRect.height > window.innerHeight - 8) top = rect.top - tipRect.height - 8;
-      tip.style.top = `${Math.max(8, top)}px`;
-      let left = rect.right - tipRect.width;
-      if (left < 8) left = 8;
-      tip.style.left = `${left}px`;
-    }
-
-    function hideDemoTip() {
-      const tip = $('demoTip');
-      if (tip) tip.hidden = true;
     }
 
     document.querySelectorAll('.mode-tab').forEach(tab => {
@@ -1495,23 +1468,71 @@
 
     $('lunchEnabled').addEventListener('change', toggleLunchFields);
 
-    // demo: the dummy connection fields explain, not configure
-    if (IS_DEMO) {
-      $('connectedUrl').addEventListener('click', () => showDemoTip('connectedUrl'));
-      $('connectedToken').addEventListener('click', () => showDemoTip('connectedToken'));
-      setConnectedStatus('', 'demoStatus');
-      document.addEventListener('click', (e) => {
-        if (!$('demoTip').contains(e.target) && e.target !== $('connectedUrl') && e.target !== $('connectedToken')) {
-          hideDemoTip();
-        }
-      });
-    }
+    // SaaS gate (02.10): the auth panel exists on a SaaS deployment only.
+    if (SAAS) {
+      $('authSection').style.display = '';
 
-    // SaaS assembly until email OTP lands (02.10): no manual connection
-    // config on a SaaS page — the section is a dead end without a way to
-    // mint a token; login replaces it. OSS (no preseed) keeps its fields.
-    if (window.WSPOMO_SAAS_URL && !IS_DEMO) {
-      $('connectedSection').style.display = 'none';
+      // email sign-in (OTP wiring lands 03.10; endpoints answer 404 until
+      // then — the panel explains instead of breaking)
+      const authStatus = (key, extra) => {
+        const t = translations[settings.language] || translations.ru;
+        const el = $('authStatus');
+        el.className = 'connected-status';
+        el.textContent = key ? ((t[key] || key) + (extra ? ` ${extra}` : '')) : '';
+      };
+
+      $('requestCodeBtn').addEventListener('click', async () => {
+        const email = $('loginEmail').value.trim();
+        if (!email) { authStatus('loginTryAgain'); return; }
+        $('requestCodeBtn').disabled = true;
+        try {
+          const res = await fetch('/api/auth/request-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          if (res.ok) {
+            authStatus('loginSent', email);
+            $('loginCodeRow').style.display = '';
+            $('verifyBtn').style.display = '';
+          } else {
+            authStatus('loginSoon');
+          }
+        } catch (e) {
+          authStatus('loginSoon');
+        }
+        $('requestCodeBtn').disabled = false;
+      });
+
+      $('verifyBtn').addEventListener('click', async () => {
+        const email = $('loginEmail').value.trim();
+        const code = $('loginCode').value.trim();
+        if (!email || !code) { authStatus('loginTryAgain'); return; }
+        $('verifyBtn').disabled = true;
+        try {
+          const res = await fetch('/api/auth/verify-code', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, code })
+          });
+          if (res.ok) {
+            const data = await res.json();
+            // the page talks to its own server from now on: empty URL means
+            // same-origin; the API token drives the engine the usual way
+            connectedCreds = { url: '', token: data.token };
+            saveConnectedCreds();
+            setConnectedUI();
+            connectedProbe();
+            closeSettings();
+            refreshProfile();
+          } else {
+            authStatus('loginBadCode');
+          }
+        } catch (e) {
+          authStatus('loginSoon');
+        }
+        $('verifyBtn').disabled = false;
+      });
     }
 
     function updateSyncToggle() {
@@ -1627,28 +1648,8 @@
 
     const CONNECTED_STORE = 'wspomo_connected';
 
-    function demoStore() {
-      try {
-        const stored = JSON.parse(localStorage.getItem(DEMO_STORE));
-        if (stored && typeof stored.savedAt === 'number' && Date.now() - stored.savedAt < DEMO_TTL_MS) {
-          return stored;
-        }
-      } catch (e) { /* expired or corrupt → fresh demo */ }
-      try { localStorage.removeItem(DEMO_STORE); } catch (e) {}
-      return null;
-    }
-
-    function saveDemoStore(data) {
-      try {
-        const kept = demoStore();
-        localStorage.setItem(DEMO_STORE, JSON.stringify({
-          ...kept, ...data, savedAt: (kept && kept.savedAt) || Date.now()
-        }));
-      } catch (e) {}
-    }
-
     function persistSettingsSnapshot() {
-      if (IS_DEMO) { saveDemoStore({ settings }); return; }
+      if (!SAAS) { saveLocalSettings(); return; }
       fetch(settingsEndpoint(), {
         method: 'POST',
         headers: settingsPostHeaders(),
@@ -1657,19 +1658,14 @@
     }
 
     function loadConnectedCreds() {
-      if (IS_DEMO) return { url: '', token: '' }; // demo is browser-local: no real connection
       try {
         const stored = JSON.parse(localStorage.getItem(CONNECTED_STORE));
         if (stored && stored.url && stored.token) return stored;
-      } catch (e) { /* fall through to the preseed/default */ }
-      // SaaS assembly (30.09): the server preseeds its own URL — a new user
-      // only needs a token. OSS builds have no preseed and stay local.
-      if (window.WSPOMO_SAAS_URL) return { url: window.WSPOMO_SAAS_URL, token: '' };
+      } catch (e) { /* fall through to the default */ }
       return { url: '', token: '' };
     }
 
     function saveConnectedCreds() {
-      if (IS_DEMO) return; // demo never stores connection credentials
       try { localStorage.setItem(CONNECTED_STORE, JSON.stringify(connectedCreds)); } catch (e) {}
     }
 
@@ -1686,14 +1682,6 @@
       chainActive: false, // Start pressed → until Reset (schedule chains can't pause)
       settingsRev: null   // server settings revision (5-char hash, 28.09)
     };
-
-    function normalizeServerUrl(raw) {
-      let url = (raw || '').trim().replace(/\/+$/, '');
-      // a scheme-less URL would resolve against the current origin and
-      // silently poll the local server instead of the SaaS
-      if (url && !/^https?:\/\//.test(url)) url = 'https://' + url;
-      return url;
-    }
 
     function isConnected() {
       return Boolean(connectedCreds.url && connectedCreds.token);

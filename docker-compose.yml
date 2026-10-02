@@ -28,12 +28,9 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - DATABASE_URL=postgres://wspomo:${POSTGRES_PASSWORD:-wspomo}@postgres:5432/wspomo
-      # SaaS assembly (30.09): when set, / preseeds the Connection section —
-      # a demo/user lands connected to this deployment. Leave empty on OSS.
-      - WSPOMO_SAAS_URL=${WSPOMO_SAAS_URL:-}
-      # demo stack (30.09): WSPOMO_DEMO=1 turns the page into a fully
-      # browser-local demo — dummy credentials, 24 h storage, no API auth
-      - WSPOMO_DEMO=${WSPOMO_DEMO:-}
+      # SaaS gate (02.10): SAAS_ENABLED=1 unlocks the server side (auth UI,
+      # full API, server chains). Default 0 = OSS self-host, browser-only.
+      - SAAS_ENABLED=${SAAS_ENABLED:-}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
       # 127.0.0.1, not localhost: in the container localhost resolves to ::1,

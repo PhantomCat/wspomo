@@ -14,6 +14,10 @@ const hasDb = Boolean(TEST_DATABASE_URL);
 // Server must boot WITH a database for the auth branches — set before require.
 if (hasDb) process.env.DATABASE_URL = TEST_DATABASE_URL;
 
+// the suite exercises the full SaaS API surface (owner model, 02.10);
+// the OSS gate is covered in tests/api.test.js
+if (hasDb) process.env.SAAS_ENABLED = '1';
+
 const { app, storage } = require('../server.js');
 
 let server;

@@ -10,6 +10,9 @@ const assert = require('node:assert');
 const path = require('node:path');
 // file-backed path (storage has its own tests against a live database)
 delete process.env.DATABASE_URL;
+// the test suite exercises the full SaaS API surface (owner model, 02.10):
+// the OSS gate is covered separately by saas-gating tests below
+process.env.SAAS_ENABLED = '1';
 
 const { app, getDefaultSettings } = require('../server.js');
 
@@ -192,14 +195,12 @@ test('OPTIONS preflight on /api/settings and /api/session', async () => {
 
 // ---------- SaaS preseed (task 30.09, variant 1) ----------
 
-test('index.html serves standalone without WSPOMO_SAAS_URL', async () => {
-  // this server booted without the env: the marker stays a plain comment
+test('index.html serves the SAAS preseed with no-store', async () => {
+  // this suite boots in SAAS mode (see env at the top)
   const res = await fetch(`${base}/`);
   assert.strictEqual(res.status, 200);
   const body = await res.text();
-  assert.ok(body.includes('<!-- WSPOMO_SAAS_PRESEED -->'), 'marker untouched in OSS mode');
-  // the page's own JS references the global, so test the assignment itself
-  assert.ok(!/<script>window\.WSPOMO_SAAS_URL = /.test(body), 'no preseed injected');
+  assert.ok(/<script>window\.WSPOMO_SAAS = true;<\/script>/.test(body), 'preseed injected');
   assert.strictEqual(res.headers.get('cache-control'), 'no-store');
 });
 
@@ -222,9 +223,39 @@ test('demo stack preseeds WSPOMO_DEMO alongside the SaaS URL', async () => {
           break;
         } catch (e) { /* still warming up */ }
       }
-      console.log(body.includes('window.WSPOMO_DEMO = true') ? 'DEMO' : 'PLAIN');
+      console.log(body.includes('window.WSPOMO_SAAS = true') ? 'SAAS' : 'PLAIN');
       process.exit(0);
     });
-  `], { env: { ...process.env, WSPOMO_SAAS_URL: 'https://demo.test', WSPOMO_DEMO: '1' }, cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 20000 });
-  assert.ok(out.stdout.includes('DEMO'), `expected demo preseed, got: ${out.stdout} ${out.stderr}`);
+  `], { env: { ...process.env, SAAS_ENABLED: '1' }, cwd: path.resolve(__dirname, '..'), encoding: 'utf8', timeout: 20000 });
+  assert.ok(out.stdout.includes('SAAS'), `expected saas preseed, got: ${out.stdout} ${out.stderr}`);
 }, { skip: false });
+
+// ---------- OSS gate (owner model, 02.10) ----------
+
+test('OSS deployment: gate answers saas_required and only status is alive', async () => {
+  const { execFileSync } = require('node:child_process');
+  const child = [
+    "const { app } = require('./server.js');",
+    "app.listen(3298, '127.0.0.1', async () => {",
+    "  const page = await fetch('http://127.0.0.1:3298/').then(r => r.text());",
+    "  const settings = await fetch('http://127.0.0.1:3298/api/settings');",
+    "  const session = await fetch('http://127.0.0.1:3298/api/session', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });",
+    "  const authMe = await fetch('http://127.0.0.1:3298/api/auth/me');",
+    "  const state = await fetch('http://127.0.0.1:3298/api/state');",
+    "  const visit = await fetch('http://127.0.0.1:3298/api/track/visit', { method: 'POST' });",
+    "  const gates = [settings, session, authMe].map(r => r.status + ':' + String(r.headers.get('content-type') || '').includes('json')).join(' ');",
+    "  console.log([gates, state.status + ':' + visit.status, page.includes('<script>window.WSPOMO_SAAS = true;') ? 'PRESEED' : 'CLEAN'].join('|'));",
+    "  process.exit(0);",
+    "});"
+  ].join('\n');
+  const out = execFileSync('node', ['-e', child], {
+    env: { ...process.env, SAAS_ENABLED: '' },
+    cwd: path.resolve(__dirname, '..'),
+    encoding: 'utf8',
+    timeout: 20000
+  });
+  const [gates, alive, preseed] = out.trim().split('|');
+  assert.strictEqual(gates, '404:true 404:true 404:true', 'settings/session/auth gated in OSS mode');
+  assert.strictEqual(alive, '200:200', 'status + telemetry stay alive');
+  assert.strictEqual(preseed, 'CLEAN', 'no SAAS preseed in the OSS page');
+});
