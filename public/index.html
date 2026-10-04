@@ -193,6 +193,7 @@
           </div>
         </div>
         <div class="profile-actions-row">
+          <button class="btn-profile-action" id="changePwBtn" data-i18n="changePassword">Сменить пароль</button>
           <button class="btn-profile-action danger" id="logoutBtn" data-i18n="logout">Выйти</button>
         </div>
       </div>
@@ -335,6 +336,10 @@
         setPasswordTitle: 'Задайте пароль (минимум 8 символов) — вход будет по email+пароль',
         setPwBtn: 'Сохранить пароль и войти',
         resetStage: 'Восстановление: введите код из письма, затем новый пароль',
+        changePassword: 'Сменить пароль',
+        pwChangePrompt: 'Новый пароль (минимум 8 символов):',
+        pwChanged: 'Пароль обновлён',
+        pwMismatch: 'Пароли не совпадают (или короче 8 символов)',
         signupClosed: 'Регистрация скоро откроется — сначала закончим приём оплаты',
         profileSection: 'Профиль',
         mintToken: 'Создать токен',
@@ -420,6 +425,10 @@
         setPasswordTitle: 'Set a password (min 8 chars) — sign-in is email+password afterwards',
         setPwBtn: 'Save password and sign in',
         resetStage: 'Recovery: enter the code from the email, then a new password',
+        changePassword: 'Change password',
+        pwChangePrompt: 'New password (min 8 chars):',
+        pwChanged: 'Password updated',
+        pwMismatch: 'Passwords do not match (or shorter than 8 chars)',
         signupClosed: 'Sign-up opens soon — payments first',
         profileSection: 'Profile',
         mintToken: 'Create token',
@@ -1491,6 +1500,20 @@
     $('mintTokenBtn').addEventListener('click', mintToken);
     $('copyTokenBtn').addEventListener('click', copyNewToken);
     $('logoutBtn').addEventListener('click', logoutProfile);
+    $('changePwBtn').addEventListener('click', async () => {
+      const t = translations[settings.language] || translations.ru;
+      const p1 = prompt(t.pwChangePrompt || 'Новый пароль (минимум 8 символов):');
+      if (!p1 || p1.length < 8) return;
+      try {
+        // cookie-authenticated (same-origin); set-password principal check
+        const res = await fetch('/api/auth/set-password', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ password: p1 })
+        });
+        alert(res.ok ? (t.pwChanged || 'Пароль обновлён') : (t.pwMismatch || 'Пароли не совпадают (или короче 8 символов)'));
+      } catch (e) { /* сеть */ }
+    });
 
     $('lunchEnabled').addEventListener('change', toggleLunchFields);
 
@@ -1534,8 +1557,10 @@
 
       // ---------- password auth (owner point 1, A-variant) ----------
       // Regular sign-in: email+password, no emails burned.
+      // stage switcher: 'password' (default) ↔ 'code' (bootstrap/reset);
+      // applied at boot too — otherwise the forgot button stays hidden
+      // forever in its inline display:none (owner bug, 04.10 late)
       const setStage = (stage) => {
-        // stages: 'password' (default), 'code' (bootstrap/reset verify)
         $('loginPasswordRow').style.display = stage === 'password' ? '' : 'none';
         $('loginBtn').style.display = stage === 'password' ? '' : 'none';
         $('requestCodeBtn').style.display = stage === 'password' ? 'none' : '';
@@ -1544,6 +1569,7 @@
         $('forgotBtn').style.display = stage === 'password' ? '' : 'none';
         $('backToLoginBtn').style.display = stage === 'password' ? 'none' : '';
       };
+      setStage('password');
 
       $('loginBtn').addEventListener('click', async () => {
         const email = $('loginEmail').value.trim();
