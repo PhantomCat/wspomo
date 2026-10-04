@@ -149,31 +149,6 @@
       </div>
     </div>
 
-    <div class="settings-section" id="authSection" style="display:none">
-      <h3 id="authSectionTitle">Вход</h3>
-      <div class="connected-box">
-        <div class="setting-row">
-          <label data-i18n="loginEmail">Email</label>
-          <input type="email" id="loginEmail" class="connected-input" autocomplete="email" spellcheck="false">
-        </div>
-        <div class="setting-row" id="loginPasswordRow">
-          <label data-i18n="loginPassword">Пароль</label>
-          <input type="password" id="loginPassword" class="connected-input" autocomplete="current-password">
-        </div>
-        <button class="btn-mint" id="loginBtn" data-i18n="verify">Войти</button>
-        <button class="btn-mint" id="requestCodeBtn" style="display:none" data-i18n="requestCode">Получить код</button>
-        <div class="setting-row" id="loginCodeRow" style="display:none">
-          <label data-i18n="loginCode">Код из письма</label>
-          <input type="text" id="loginCode" class="connected-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
-        </div>
-        <button class="btn-mint" id="verifyBtn" style="display:none" data-i18n="verify">Войти</button>
-        <button class="btn-mint" id="forgotBtn" style="display:none" data-i18n="forgotPassword">Забыл пароль</button>
-        <button class="btn-mint" id="backToLoginBtn" style="display:none" data-i18n="backToLogin">Обычный вход</button>
-        <div class="connected-status" id="authStatus"></div>
-        <div class="connected-status" id="authStatus"></div>
-      </div>
-    </div>
-
     <div class="settings-section" id="profileSection" style="display:none">
       <h3 id="profileSectionTitle">Профиль</h3>
       <div class="connected-box">
@@ -193,7 +168,6 @@
           </div>
         </div>
         <div class="profile-actions-row">
-          <button class="btn-profile-action" id="changePwBtn" data-i18n="changePassword">Сменить пароль</button>
           <button class="btn-profile-action danger" id="logoutBtn" data-i18n="logout">Выйти</button>
         </div>
       </div>
@@ -260,6 +234,7 @@
   </footer>
 
   <script>
+
     const CIRCUMFERENCE = 2 * Math.PI * 130;
 
     const translations = {
@@ -318,29 +293,6 @@
         connectedFail: 'Сервер не отвечает или токен неверный',
         connectedHowTitle: 'Как работает:',
         connectedHowText: 'Пусто — таймер живёт в этом браузере. Адрес SaaS + токен — тик приходит с сервера, даже когда браузер закрыт.',
-        loginSection: 'Вход',
-        loginEmail: 'Email',
-        loginEmailPlaceholder: 'you@example.com',
-        requestCode: 'Получить код',
-        loginCode: 'Код из письма',
-        verify: 'Войти',
-        loginPassword: 'Пароль',
-        forgotPassword: 'Забыл пароль',
-        backToLogin: 'Обычный вход',
-        loginSent: 'Код отправлен на',
-        loginBadCode: 'Неверный или просроченный код',
-        loginSoon: 'Вход по email откроется позже (сервис в запуске)',
-        loginTryAgain: 'Попробуйте ещё раз',
-        loginBadCreds: 'Неверный email или пароль',
-        loginOk: 'Вы вошли',
-        setPasswordTitle: 'Задайте пароль (минимум 8 символов) — вход будет по email+пароль',
-        setPwBtn: 'Сохранить пароль и войти',
-        resetStage: 'Восстановление: введите код из письма, затем новый пароль',
-        changePassword: 'Сменить пароль',
-        pwChangePrompt: 'Новый пароль (минимум 8 символов):',
-        pwChanged: 'Пароль обновлён',
-        pwMismatch: 'Пароли не совпадают (или короче 8 символов)',
-        signupClosed: 'Регистрация скоро откроется — сначала закончим приём оплаты',
         profileSection: 'Профиль',
         mintToken: 'Создать токен',
         tokenOnceTitle: 'Токен показывается один раз:',
@@ -407,29 +359,6 @@
         connectedFail: 'Server unreachable or token invalid',
         connectedHowTitle: 'How it works:',
         connectedHowText: 'Empty — the timer lives in this browser. SaaS URL + token — the tick comes from the server, even with the browser closed.',
-        loginSection: 'Sign in',
-        loginEmail: 'Email',
-        loginEmailPlaceholder: 'you@example.com',
-        requestCode: 'Get the code',
-        loginCode: 'Code from the email',
-        verify: 'Sign in',
-        loginPassword: 'Password',
-        forgotPassword: 'Forgot password',
-        backToLogin: 'Regular sign-in',
-        loginSent: 'Code sent to',
-        loginBadCode: 'Wrong or expired code',
-        loginSoon: 'Email sign-in opens later (service is launching)',
-        loginTryAgain: 'Try again',
-        loginBadCreds: 'Wrong email or password',
-        loginOk: 'Signed in',
-        setPasswordTitle: 'Set a password (min 8 chars) — sign-in is email+password afterwards',
-        setPwBtn: 'Save password and sign in',
-        resetStage: 'Recovery: enter the code from the email, then a new password',
-        changePassword: 'Change password',
-        pwChangePrompt: 'New password (min 8 chars):',
-        pwChanged: 'Password updated',
-        pwMismatch: 'Passwords do not match (or shorter than 8 chars)',
-        signupClosed: 'Sign-up opens soon — payments first',
         profileSection: 'Profile',
         mintToken: 'Create token',
         tokenOnceTitle: 'The token is shown once:',
@@ -534,10 +463,6 @@
       $('notifSectionTitle').textContent = t.notifications;
       const connectedTitle = $('connectedSectionTitle');
       if (connectedTitle) connectedTitle.textContent = t.connectedSection;
-      const authTitle = $('authSectionTitle');
-      if (authTitle) authTitle.textContent = t.loginSection || t.connectedSection;
-      const loginEmail = $('loginEmail');
-      if (loginEmail && t.loginEmailPlaceholder) loginEmail.placeholder = t.loginEmailPlaceholder;
       const profileTitle = $('profileSectionTitle');
       if (profileTitle) profileTitle.textContent = t.profileSection;
 
@@ -1500,158 +1425,8 @@
     $('mintTokenBtn').addEventListener('click', mintToken);
     $('copyTokenBtn').addEventListener('click', copyNewToken);
     $('logoutBtn').addEventListener('click', logoutProfile);
-    $('changePwBtn').addEventListener('click', async () => {
-      const t = translations[settings.language] || translations.ru;
-      const p1 = prompt(t.pwChangePrompt || 'Новый пароль (минимум 8 символов):');
-      if (!p1 || p1.length < 8) return;
-      try {
-        // cookie-authenticated (same-origin); set-password principal check
-        const res = await fetch('/api/auth/set-password', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ password: p1 })
-        });
-        alert(res.ok ? (t.pwChanged || 'Пароль обновлён') : (t.pwMismatch || 'Пароли не совпадают (или короче 8 символов)'));
-      } catch (e) { /* сеть */ }
-    });
 
     $('lunchEnabled').addEventListener('change', toggleLunchFields);
-
-    // SaaS gate (02.10): the auth panel exists on a SaaS deployment only.
-    if (SAAS) {
-      // default visible; refreshProfile() hides it the moment a principal
-      // (logged-in cookie) is confirmed — profile replaces the sign-in panel
-      $('authSection').style.display = '';
-
-      const authStatus = (key, extra) => {
-        const t = translations[settings.language] || translations.ru;
-        const el = $('authStatus');
-        el.className = 'connected-status';
-        el.textContent = key ? ((t[key] || key) + (extra ? ` ${extra}` : '')) : '';
-      };
-
-      $('requestCodeBtn').addEventListener('click', async () => {
-        const email = $('loginEmail').value.trim();
-        if (!email) { authStatus('loginTryAgain'); return; }
-        $('requestCodeBtn').disabled = true;
-        try {
-          const res = await fetch('/api/auth/request-code', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-          });
-          if (res.ok) {
-            authStatus('loginSent', email);
-            $('loginCodeRow').style.display = '';
-            $('verifyBtn').style.display = '';
-          } else {
-            let data = {};
-            try { data = await res.json(); } catch (e) {}
-            authStatus(data.error === 'signup_closed' ? 'signupClosed' : 'loginSoon');
-          }
-        } catch (e) {
-          authStatus('loginSoon');
-        }
-        $('requestCodeBtn').disabled = false;
-      });
-
-      // ---------- password auth (owner point 1, A-variant) ----------
-      // Regular sign-in: email+password, no emails burned.
-      // stage switcher: 'password' (default) ↔ 'code' (bootstrap/reset);
-      // applied at boot too — otherwise the forgot button stays hidden
-      // forever in its inline display:none (owner bug, 04.10 late)
-      const setStage = (stage) => {
-        $('loginPasswordRow').style.display = stage === 'password' ? '' : 'none';
-        $('loginBtn').style.display = stage === 'password' ? '' : 'none';
-        $('requestCodeBtn').style.display = stage === 'password' ? 'none' : '';
-        $('loginCodeRow').style.display = stage === 'code' ? '' : 'none';
-        $('verifyBtn').style.display = stage === 'code' ? '' : 'none';
-        $('forgotBtn').style.display = stage === 'password' ? '' : 'none';
-        $('backToLoginBtn').style.display = stage === 'password' ? 'none' : '';
-      };
-      setStage('password');
-
-      $('loginBtn').addEventListener('click', async () => {
-        const email = $('loginEmail').value.trim();
-        const password = $('loginPassword').value;
-        if (!email || !password) { authStatus('loginTryAgain'); return; }
-        $('loginBtn').disabled = true;
-        try {
-          const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password })
-          });
-          if (res.ok) {
-            authStatus('loginOk');
-            closeSettings();
-            refreshProfile();
-          } else {
-            const data = await (res.json().catch(() => ({})));
-            authStatus(data.error === 'signup_closed' ? 'signupClosed'
-              : data.error === 'invalid_credentials' ? 'loginBadCreds' : 'loginSoon');
-          }
-        } catch (e) {
-          authStatus('loginSoon');
-        }
-        $('loginBtn').disabled = false;
-      });
-
-      // bootstrap path (signup or password reset): email → code → set password
-      $('forgotBtn').addEventListener('click', () => {
-        setStage('code');
-        authStatus('resetStage');
-      });
-      $('backToLoginBtn').addEventListener('click', () => {
-        setStage('password');
-        authStatus('');
-      });
-
-      $('verifyBtn').addEventListener('click', async () => {
-        const email = $('loginEmail').value.trim();
-        const code = $('loginCode').value.trim();
-        if (!email || !code) { authStatus('loginTryAgain'); return; }
-        $('verifyBtn').disabled = true;
-        try {
-          const res = await fetch('/api/auth/verify-code', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, code })
-          });
-          if (res.ok) {
-            const data = await res.json();
-            // bootstrap verified: now the password must be set (A-variant)
-            const tloc = translations[settings.language] || translations.ru;
-            const plain = prompt(tloc.setPasswordTitle || 'Set a password (min 8 chars)');
-            if (plain && plain.length >= 8) {
-              const sp = await fetch('/api/auth/set-password', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.token },
-                body: JSON.stringify({ password: plain })
-              });
-              if (sp.ok) {
-                authStatus('loginOk');
-              } else {
-                authStatus('loginTryAgain');
-              }
-            }
-            // the page talks to its own server from now on: empty URL means
-            // same-origin; the API token drives the engine the usual way
-            connectedCreds = { url: '', token: data.token };
-            saveConnectedCreds();
-            setConnectedUI();
-            connectedProbe();
-            closeSettings();
-            refreshProfile();
-          } else {
-            authStatus('loginBadCode');
-          }
-        } catch (e) {
-          authStatus('loginSoon');
-        }
-        $('verifyBtn').disabled = false;
-      });
-    }
 
     function updateSyncToggle() {
       $('syncToggle').classList.toggle('active', settings.workdaySync);
@@ -2055,9 +1830,6 @@
     async function refreshProfile() {
       const section = $('profileSection');
       if (!section) return;
-      // the login panel is the no-principal state: when a principal exists,
-      // the sign-in panel must disappear (owner report, 04.10 evening)
-      const authPanel = $('authSection');
       try {
         const res = await fetch(`${profileEndpoint()}/me`, isConnected() ? { headers: authHeaders() } : {});
         if (!res.ok) throw new Error(`status ${res.status}`);
@@ -2065,10 +1837,8 @@
         section.style.display = '';
         $('profileEmail').textContent = me.email || '';
         renderTokens(me.apiTokens || []);
-        if (authPanel) authPanel.style.display = 'none';
       } catch (e) {
         section.style.display = 'none'; // no principal → no profile UI
-        if (authPanel && SAAS) authPanel.style.display = '';
       }
     }
 
@@ -2230,6 +2000,7 @@
     updateDisplay();
     updateSessionDots();
     initTracking();
-   </script>
+   
+  </script>
 </body>
 </html>
