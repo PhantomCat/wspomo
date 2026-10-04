@@ -31,6 +31,10 @@ services:
       # SaaS gate (02.10): SAAS_ENABLED=1 unlocks the server side (auth UI,
       # full API, server chains). Default 0 = OSS self-host, browser-only.
       - SAAS_ENABLED=${SAAS_ENABLED:-}
+      # email delivery (04.10): Resend API key lives in .env of the
+      # deployment (never in git); empty key on prod → 503 mail_not_configured
+      - RESEND_API_KEY=${RESEND_API_KEY:-}
+      - MAIL_FROM=${MAIL_FROM:-wspomo <noreply@wspomo.work>}
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://127.0.0.1:3000"]
       # 127.0.0.1, not localhost: in the container localhost resolves to ::1,
