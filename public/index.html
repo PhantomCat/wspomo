@@ -156,12 +156,20 @@
           <label data-i18n="loginEmail">Email</label>
           <input type="email" id="loginEmail" class="connected-input" autocomplete="email" spellcheck="false">
         </div>
-        <button class="btn-mint" id="requestCodeBtn" data-i18n="requestCode">Получить код</button>
+        <div class="setting-row" id="loginPasswordRow">
+          <label data-i18n="loginPassword">Пароль</label>
+          <input type="password" id="loginPassword" class="connected-input" autocomplete="current-password">
+        </div>
+        <button class="btn-mint" id="loginBtn" data-i18n="verify">Войти</button>
+        <button class="btn-mint" id="requestCodeBtn" style="display:none" data-i18n="requestCode">Получить код</button>
         <div class="setting-row" id="loginCodeRow" style="display:none">
           <label data-i18n="loginCode">Код из письма</label>
           <input type="text" id="loginCode" class="connected-input" inputmode="numeric" maxlength="6" autocomplete="one-time-code">
         </div>
         <button class="btn-mint" id="verifyBtn" style="display:none" data-i18n="verify">Войти</button>
+        <button class="btn-mint" id="forgotBtn" style="display:none" data-i18n="forgotPassword">Забыл пароль</button>
+        <button class="btn-mint" id="backToLoginBtn" style="display:none" data-i18n="backToLogin">Обычный вход</button>
+        <div class="connected-status" id="authStatus"></div>
         <div class="connected-status" id="authStatus"></div>
       </div>
     </div>
@@ -315,10 +323,18 @@
         requestCode: 'Получить код',
         loginCode: 'Код из письма',
         verify: 'Войти',
+        loginPassword: 'Пароль',
+        forgotPassword: 'Забыл пароль',
+        backToLogin: 'Обычный вход',
         loginSent: 'Код отправлен на',
         loginBadCode: 'Неверный или просроченный код',
         loginSoon: 'Вход по email откроется позже (сервис в запуске)',
         loginTryAgain: 'Попробуйте ещё раз',
+        loginBadCreds: 'Неверный email или пароль',
+        loginOk: 'Вы вошли',
+        setPasswordTitle: 'Задайте пароль (минимум 8 символов) — вход будет по email+пароль',
+        setPwBtn: 'Сохранить пароль и войти',
+        resetStage: 'Восстановление: введите код из письма, затем новый пароль',
         signupClosed: 'Регистрация скоро откроется — сначала закончим приём оплаты',
         profileSection: 'Профиль',
         mintToken: 'Создать токен',
@@ -392,10 +408,18 @@
         requestCode: 'Get the code',
         loginCode: 'Code from the email',
         verify: 'Sign in',
+        loginPassword: 'Password',
+        forgotPassword: 'Forgot password',
+        backToLogin: 'Regular sign-in',
         loginSent: 'Code sent to',
         loginBadCode: 'Wrong or expired code',
         loginSoon: 'Email sign-in opens later (service is launching)',
         loginTryAgain: 'Try again',
+        loginBadCreds: 'Wrong email or password',
+        loginOk: 'Signed in',
+        setPasswordTitle: 'Set a password (min 8 chars) — sign-in is email+password afterwards',
+        setPwBtn: 'Save password and sign in',
+        resetStage: 'Recovery: enter the code from the email, then a new password',
         signupClosed: 'Sign-up opens soon — payments first',
         profileSection: 'Profile',
         mintToken: 'Create token',
@@ -1476,8 +1500,6 @@
       // (logged-in cookie) is confirmed — profile replaces the sign-in panel
       $('authSection').style.display = '';
 
-      // email sign-in (OTP wiring lands 03.10; endpoints answer 404 until
-      // then — the panel explains instead of breaking)
       const authStatus = (key, extra) => {
         const t = translations[settings.language] || translations.ru;
         const el = $('authStatus');
@@ -1510,6 +1532,55 @@
         $('requestCodeBtn').disabled = false;
       });
 
+      // ---------- password auth (owner point 1, A-variant) ----------
+      // Regular sign-in: email+password, no emails burned.
+      const setStage = (stage) => {
+        // stages: 'password' (default), 'code' (bootstrap/reset verify)
+        $('loginPasswordRow').style.display = stage === 'password' ? '' : 'none';
+        $('loginBtn').style.display = stage === 'password' ? '' : 'none';
+        $('requestCodeBtn').style.display = stage === 'password' ? 'none' : '';
+        $('loginCodeRow').style.display = stage === 'code' ? '' : 'none';
+        $('verifyBtn').style.display = stage === 'code' ? '' : 'none';
+        $('forgotBtn').style.display = stage === 'password' ? '' : 'none';
+        $('backToLoginBtn').style.display = stage === 'password' ? 'none' : '';
+      };
+
+      $('loginBtn').addEventListener('click', async () => {
+        const email = $('loginEmail').value.trim();
+        const password = $('loginPassword').value;
+        if (!email || !password) { authStatus('loginTryAgain'); return; }
+        $('loginBtn').disabled = true;
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email, password })
+          });
+          if (res.ok) {
+            authStatus('loginOk');
+            closeSettings();
+            refreshProfile();
+          } else {
+            const data = await (res.json().catch(() => ({})));
+            authStatus(data.error === 'signup_closed' ? 'signupClosed'
+              : data.error === 'invalid_credentials' ? 'loginBadCreds' : 'loginSoon');
+          }
+        } catch (e) {
+          authStatus('loginSoon');
+        }
+        $('loginBtn').disabled = false;
+      });
+
+      // bootstrap path (signup or password reset): email → code → set password
+      $('forgotBtn').addEventListener('click', () => {
+        setStage('code');
+        authStatus('resetStage');
+      });
+      $('backToLoginBtn').addEventListener('click', () => {
+        setStage('password');
+        authStatus('');
+      });
+
       $('verifyBtn').addEventListener('click', async () => {
         const email = $('loginEmail').value.trim();
         const code = $('loginCode').value.trim();
@@ -1523,6 +1594,21 @@
           });
           if (res.ok) {
             const data = await res.json();
+            // bootstrap verified: now the password must be set (A-variant)
+            const tloc = translations[settings.language] || translations.ru;
+            const plain = prompt(tloc.setPasswordTitle || 'Set a password (min 8 chars)');
+            if (plain && plain.length >= 8) {
+              const sp = await fetch('/api/auth/set-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + data.token },
+                body: JSON.stringify({ password: plain })
+              });
+              if (sp.ok) {
+                authStatus('loginOk');
+              } else {
+                authStatus('loginTryAgain');
+              }
+            }
             // the page talks to its own server from now on: empty URL means
             // same-origin; the API token drives the engine the usual way
             connectedCreds = { url: '', token: data.token };

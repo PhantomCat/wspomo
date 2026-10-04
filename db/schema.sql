@@ -7,6 +7,11 @@ CREATE TABLE IF NOT EXISTS users (
   email       TEXT NOT NULL UNIQUE,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+-- password auth (04–05.10, owner decision A): OTP only for account creation
+-- and password reset; hash = scrypt (salt.password, 64B),set on first login
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT;
+-- billing seam (owner point 2): free by default; gates the paid API later
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan TEXT NOT NULL DEFAULT 'free';
 
 CREATE TABLE IF NOT EXISTS settings (
   user_id    INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
@@ -27,6 +32,9 @@ CREATE TABLE IF NOT EXISTS sessions (
   revoked_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
+-- billing visibility (04.10): rows that a wallet/billing integration will
+-- later manage; balance units = days of paid plan remaining (integer days)
+ALTER TABLE users ADD COLUMN IF NOT EXISTS plan_credits INTEGER NOT NULL DEFAULT 0;
 
 -- Server-authoritative schedule chains (KT-1, 21.09): at most one active
 -- timer session per user; replay recomputes state from the schedule and
