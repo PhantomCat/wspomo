@@ -105,3 +105,19 @@ test('sessions: web and api kinds coexist', { skip: !hasDb }, async () => {
   assert.strictEqual((await storage.findSessionByToken('web-token')).type, 'web');
   assert.strictEqual((await storage.findSessionByToken('api-token')).type, 'api');
 });
+
+test('sessions: bulk revoke scoped by label (recovery fix 05.10)', { skip: !hasDb }, async () => {
+  const user = await storage.pool.query("INSERT INTO users (email) VALUES ($1) RETURNING id", ['st-4@example.com']);
+  const uid = user.rows[0].id;
+  await storage.createSession(uid, 'api', 't-browser-old', { label: 'browser' });
+  await storage.createSession(uid, 'api', 't-waybar', { label: 'waybar' });
+  await storage.createSession(uid, 'api', 't-mine', { label: 'laptop' });
+  // recovery: revoke only the browser-labelled engine token
+  assert.strictEqual(await storage.revokeApiTokens(uid, { label: 'browser' }), 1);
+  assert.strictEqual(await storage.findSessionByToken('t-browser-old'), null);
+  assert.strictEqual((await storage.findSessionByToken('t-waybar')).label, 'waybar');
+  assert.strictEqual((await storage.findSessionByToken('t-mine')).label, 'laptop');
+  // full revoke (existing profile action): everything left of this user
+  assert.strictEqual(await storage.revokeApiTokens(uid), 2);
+  assert.strictEqual(await storage.findSessionByToken('t-waybar'), null);
+});
