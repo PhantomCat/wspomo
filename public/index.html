@@ -1472,6 +1472,8 @@
 
     // SaaS gate (02.10): the auth panel exists on a SaaS deployment only.
     if (SAAS) {
+      // default visible; refreshProfile() hides it the moment a principal
+      // (logged-in cookie) is confirmed — profile replaces the sign-in panel
       $('authSection').style.display = '';
 
       // email sign-in (OTP wiring lands 03.10; endpoints answer 404 until
@@ -1941,6 +1943,9 @@
     async function refreshProfile() {
       const section = $('profileSection');
       if (!section) return;
+      // the login panel is the no-principal state: when a principal exists,
+      // the sign-in panel must disappear (owner report, 04.10 evening)
+      const authPanel = $('authSection');
       try {
         const res = await fetch(`${profileEndpoint()}/me`, isConnected() ? { headers: authHeaders() } : {});
         if (!res.ok) throw new Error(`status ${res.status}`);
@@ -1948,8 +1953,10 @@
         section.style.display = '';
         $('profileEmail').textContent = me.email || '';
         renderTokens(me.apiTokens || []);
+        if (authPanel) authPanel.style.display = 'none';
       } catch (e) {
         section.style.display = 'none'; // no principal → no profile UI
+        if (authPanel && SAAS) authPanel.style.display = '';
       }
     }
 
