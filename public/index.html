@@ -319,6 +319,7 @@
         loginBadCode: 'Неверный или просроченный код',
         loginSoon: 'Вход по email откроется позже (сервис в запуске)',
         loginTryAgain: 'Попробуйте ещё раз',
+        signupClosed: 'Регистрация скоро откроется — сначала закончим приём оплаты',
         profileSection: 'Профиль',
         mintToken: 'Создать токен',
         tokenOnceTitle: 'Токен показывается один раз:',
@@ -395,6 +396,7 @@
         loginBadCode: 'Wrong or expired code',
         loginSoon: 'Email sign-in opens later (service is launching)',
         loginTryAgain: 'Try again',
+        signupClosed: 'Sign-up opens soon — payments first',
         profileSection: 'Profile',
         mintToken: 'Create token',
         tokenOnceTitle: 'The token is shown once:',
@@ -1496,7 +1498,9 @@
             $('loginCodeRow').style.display = '';
             $('verifyBtn').style.display = '';
           } else {
-            authStatus('loginSoon');
+            let data = {};
+            try { data = await res.json(); } catch (e) {}
+            authStatus(data.error === 'signup_closed' ? 'signupClosed' : 'loginSoon');
           }
         } catch (e) {
           authStatus('loginSoon');

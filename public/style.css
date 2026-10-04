@@ -799,6 +799,28 @@ body.connected #skipBtn { display: none; }
 
 .btn-test-sound:hover { background: var(--ctp-surface2); }
 
+/* кнопки панели входа (04.10): общий стиль кнопок проекта */
+.btn-mint {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  width: 100%;
+  padding: 0.5rem;
+  background: var(--ctp-surface1);
+  color: var(--ctp-text);
+  border: none;
+  border-radius: 8px;
+  font-size: 0.8125rem;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 0.5rem;
+  transition: background 0.2s;
+}
+.btn-mint:hover { background: var(--ctp-surface2); }
+.btn-mint:disabled { opacity: 0.55; cursor: default; }
+
+
 .btn-test-sound .icon-bell {
   width: 14px;
   height: 14px;
